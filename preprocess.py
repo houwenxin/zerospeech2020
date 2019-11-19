@@ -11,9 +11,8 @@ import os
 import numpy as np
 from hps.hps import hp
 
-from scipy import signal
+from utils.convert import spectrogram2wav
 import soundfile as sf
-import copy
 
 src_path = "../../databases/english_small/train/unit"
 trg_path = "./"
@@ -58,28 +57,6 @@ def get_spectrograms(sound_file):
     mag = mag.T.astype(np.float32)  # (T, 1+n_fft//2)
     return mel, mag
     
-def griffin_lim(spectrogram): # Applies Griffin-Lim's raw.
-	
-	def _invert_spectrogram(spectrogram): # spectrogram: [f, t]
-		return librosa.istft(spectrogram, hp.hop_length, win_length=hp.win_length, window="hann")
-
-	X_best = copy.deepcopy(spectrogram)
-	for i in range(hp.n_iter):
-		X_t = _invert_spectrogram(X_best)
-		est = librosa.stft(X_t, hp.n_fft, hp.hop_length, win_length=hp.win_length)
-		phase = est / np.maximum(1e-8, np.abs(est))
-		X_best = spectrogram * phase
-	X_t = _invert_spectrogram(X_best)
-	y = np.real(X_t)
-	return y
-def spectrogram2wav(mag): # Generate wave file from spectrogram
-	mag = mag.T # transpose
-	mag = (np.clip(mag, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db # de-noramlize
-	mag = np.power(10.0, mag * 0.05) # to amplitude
-	wav = griffin_lim(mag) # wav reconstruction
-	wav = signal.lfilter([1], [1, -hp.preemphasis], wav) # de-preemphasis
-	wav, _ = librosa.effects.trim(wav) # trim
-	return wav.astype(np.float32)
 
 
 def preprocess(src_path, trg_path):
@@ -91,4 +68,4 @@ if __name__ == "__main__":
     mel, mag = get_spectrograms(file)
     wav_data = spectrogram2wav(mag)
     wav_path = os.path.join(".", "rebuild.wav")
-    sf.write(wav_path, wav_data, hp.sr, 'PCM_16')
+    sf.write(wav_path, wav_data, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装

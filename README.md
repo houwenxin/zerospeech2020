@@ -1,3 +1,3 @@
 # zerospeech2020
 
-Requirements: pytorch, 
+Requirements: pytorch, librosa, pysoundfile, 
