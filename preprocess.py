@@ -6,25 +6,31 @@
 @LastEditTime: 2019-11-19 20:13:27
 @Description: 
 '''
-import librosa
 import os
 import numpy as np
 from hps.hps import hp
 
 from utils.convert import spectrogram2wav
 import soundfile as sf
+from utils import audio
 
 src_path = "../../databases/english_small/train/unit"
 trg_path = "./"
 
 def get_spectrograms(sound_file):
-    y, _ = librosa.load(sound_file, sr=hp.sr) # Load an audio file as a floating point time series.
-    #print(len(y))
-    y, _ = librosa.effects.trim(y) # Trim leading and trailing silence from an audio signal.
-    #print(y, ind)
-    y = np.append(y[0], y[1:] - hp.preemphasis * y[0:-1]) # 预加重：y(n)=x(n)-ax(n-1) 其中a为预加重系数，一般是0.9~1.0之间，通常取0.98。这里取0.97
-    #y = librosa.effects.preemphasis(y, coef=hp.preemphasis) # ??? Why different? Pre-emphasize an audio signal with a first-order auto-regressive filter:
-    #print(y)
+    y = audio.load_wav(sound_file, sr=hp.sr)
+    print(len(y))
+    y = audio.trim_silence(y)
+    print(len(y))
+    y = audio.preemphasis(y, hp.preemphasis)
+    print(y)
+    mel = audio.melspectrogram(y, hp)
+    print(mel)
+    print(mel.shape)
+    mfcc = audio.mfcc(y, hp)
+    print(mfcc)
+    print(mfcc.shape)
+    '''
     fft_windows = librosa.stft(y=y, 
                         n_fft=hp.n_fft, 
                         hop_length=hp.hop_length, 
@@ -36,6 +42,8 @@ def get_spectrograms(sound_file):
     mel_filter = librosa.filters.mel(sr=hp.sr, n_fft=hp.n_fft, n_mels=hp.n_mels) # Create a Filterbank matrix to combine FFT bins into Mel-frequency bins
     mel = np.dot(mel_filter, magnitude)
     #print(mel)
+
+    '''
     '''
     S = librosa.feature.melspectrogram(y=y, sr=hp.sr, n_fft=hp.n_fft, 
                                    hop_length=hp.hop_length, 
@@ -44,17 +52,16 @@ def get_spectrograms(sound_file):
                                    power=1) # S == mel when power == 1
     print(S)
     assert (mel == S).all()
-    '''
     # to decibel
     mel = 20 * np.log10(np.maximum(1e-5, mel)) # 等价 mel = 2 * librosa.core.power_to_db(mel, amin=1e-5)
     mag = 20 * np.log10(np.maximum(1e-5, magnitude))
     # normalize
     mel = np.clip((mel - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
     mag = np.clip((mag - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
-
 	# Transpose
     mel = mel.T.astype(np.float32)  # (T, n_mels)
     mag = mag.T.astype(np.float32)  # (T, 1+n_fft//2)
+    '''
     return mel, mag
     
 
