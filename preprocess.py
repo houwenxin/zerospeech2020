@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:15:56
 @LastEditors: houwx
-@LastEditTime: 2019-11-18 18:05:01
+@LastEditTime: 2019-11-19 20:13:27
 @Description: 
 '''
 import librosa
@@ -58,9 +58,6 @@ def get_spectrograms(sound_file):
     return mel, mag
     
 
-
-def preprocess(src_path, trg_path):
-    pass
 
 
 if __name__ == "__main__":
