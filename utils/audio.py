@@ -10,22 +10,25 @@ from scipy.fftpack import dct
 def load_wav(path, sr=16000):
     return librosa.core.load(path, sr=sr)[0] # Load an audio file as a floating point time series.
 
+#==================================== Preprocess ===========================================
 def preemphasis(x, preemphasis=0.97):
     #np.append(x[0], x[1:] - preemphasis * x[0:-1]) # 预加重：y(n)=x(n)-ax(n-1) 其中a为预加重系数，一般是0.9~1.0之间，通常取0.98。这里取0.97
     return scipy.signal.lfilter([1, -preemphasis], [1], x) # np.float64, More Accurate
-
-def inv_preemphasis(x, preemphasis=0.97):
-  return scipy.signal.lfilter([1], [1, -preemphasis], x)
 
 def trim_silence(wav):
     # Trim leading and trailing silence from an audio signal.
 	return librosa.effects.trim(wav)[0]
 
+def rescale(wav, hp):
+    if hp.rescale:
+        wav = wav / np.abs(wav).max() * hp.rescaling_max
+    return wav
+
 def mfcc(sample, hp):
     mfcc = _mfcc(sample, hp)
     mfcc_delta = _delta(mfcc)
     mfcc_delta_delta = _delta(mfcc_delta)
-    feature = np.concatenate((mfcc, mfcc_delta, mfcc_delta_delta)).T
+    feature = np.concatenate((mfcc, mfcc_delta, mfcc_delta_delta))
     return feature
 def _delta(S):
     delta = librosa.feature.delta(S, width=7)
@@ -35,10 +38,13 @@ def _mfcc(sample, hp):
     dct_type=2
     norm='ortho'
     return dct(S, axis=0, type=dct_type, norm=norm)[:hp.n_mfcc] # TODO Verify: This should be equal to librosa.feature.mfcc(S, ...)
+def linspectrogram(wav, hp):
+    D = _stft(wav, hp)
+    return np.abs(D) ** hp.magnitude_power
 def melspectrogram(wav, hp):
 	D = _stft(wav, hp)
 	S = _amp_to_db(_linear_to_mel(np.abs(D) ** hp.magnitude_power, hp), hp) - hp.ref_level_db
-	if hp.signal_norm:
+	if hp.signal_normalization:
 		return _normalize(S, hp)
 	return S
 
@@ -58,8 +64,7 @@ def _stft(y, hp):
     return librosa.stft(y=y, 
                         n_fft=hp.n_fft, 
                         hop_length=hp.hop_length, 
-                        win_length=hp.win_length,
-                        center=False)
+                        win_length=hp.win_length)
 def _amp_to_db(x, hp):
     #min_level = np.exp(hp.min_level_db / 20 * np.log(10)) # TODO How to calculate
     return 20 * np.log10(np.maximum(1e-5, x)) # Why 1e-5
@@ -69,6 +74,58 @@ def _normalize(S, hp):
             (-hp.min_level_db)) - hp.max_abs_value, -hp.max_abs_value, hp.max_abs_value)
     else:
         return np.clip(hp.max_abs_value * ((S - hp.min_level_db) / (-hp.min_level_db)), 0, hp.max_abs_value)
+#================================================ Conversion ====================================================
+def inv_linear_spectrogram(linear_spectrogram, hp):
+    '''Converts linear spectrogram to waveform using librosa'''
+    if hp.signal_normalization:
+        D = _denormalize(linear_spectrogram, hp)
+    else:
+        D = linear_spectrogram
+    S = _db_to_amp(D + hp.ref_level_db)**(1/hp.magnitude_power) #Convert back to linear
+    wav = inv_preemphasis(_griffin_lim(S ** hp.power, hp), hp.preemphasis)
+    wav = trim_silence(wav)
+    return wav.astype(np.float32)
+def inv_mel_spectrogram(mel_spectrogram, hp):
+    '''Converts mel spectrogram to waveform using librosa'''
+    if hp.signal_normalization:
+        D = _denormalize(mel_spectrogram, hp)
+    else:
+        D = mel_spectrogram
+    S = _mel_to_linear(_db_to_amp(D + hp.ref_level_db)**(1/hp.magnitude_power), hp)  # Convert back to linear
+    wav = inv_preemphasis(_griffin_lim(S ** hp.power, hp), hp.preemphasis)
+    wav = trim_silence(wav)
+    return wav.astype(np.float32)
+def _denormalize(D, hp):
+    if hp.symmetric_mels:
+        return (((np.clip(D, -hp.max_abs_value,
+            hp.max_abs_value) + hp.max_abs_value) * -hp.min_level_db / (2 * hp.max_abs_value))
+            + hp.min_level_db)
+    else:
+        return ((np.clip(D, 0, hp.max_abs_value) * -hp.min_level_db / hp.max_abs_value) + hp.min_level_db)
+def inv_preemphasis(x, preemphasis=0.97):
+    return scipy.signal.lfilter([1], [1, -preemphasis], x)
+def _db_to_amp(x):
+	return np.power(10.0, (x) * 0.05)
+def _griffin_lim(S, hp):
+    '''librosa implementation of Griffin-Lim
+    Based on https://github.com/librosa/librosa/issues/434
+    '''
+    angles = np.exp(2j * np.pi * np.random.rand(*S.shape))
+    S_complex = np.abs(S).astype(np.complex)
+    y = _istft(S_complex * angles, hp)
+    for i in range(hp.griffin_lim_iters):
+        angles = np.exp(1j * np.angle(_stft(y, hp)))
+        y = _istft(S_complex * angles, hp)
+    return y
+def _istft(y, hp):
+	return librosa.istft(y, hop_length=hp.hop_length, win_length=hp.win_length)
+
+_inv_mel_basis = None
+def _mel_to_linear(mel_spectrogram, hparams):
+	global _inv_mel_basis
+	if _inv_mel_basis is None:
+		_inv_mel_basis = np.linalg.pinv(_build_mel_basis(hparams))
+	return np.maximum(1e-10, np.dot(_inv_mel_basis, mel_spectrogram))
 """
 ############################################# UNUSED ########################################################################
 def find_endpoint(wav, threshold_db=-40, min_silence_sec=0.8):

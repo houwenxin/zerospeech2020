@@ -10,66 +10,48 @@ import os
 import numpy as np
 from hps.hps import hp
 
-from utils.convert import spectrogram2wav
 import soundfile as sf
-from utils import audio
+from utils import audio2 as audio
 
 src_path = "../../databases/english_small/train/unit"
 trg_path = "./"
 
 def get_spectrograms(sound_file):
     y = audio.load_wav(sound_file, sr=hp.sr)
-    print(len(y))
+    #print(len(y)
     y = audio.trim_silence(y)
-    print(len(y))
-    y = audio.preemphasis(y, hp.preemphasis)
     print(y)
-    mel = audio.melspectrogram(y, hp)
-    print(mel)
-    print(mel.shape)
-    mfcc = audio.mfcc(y, hp)
-    print(mfcc)
-    print(mfcc.shape)
-    '''
-    fft_windows = librosa.stft(y=y, 
-                        n_fft=hp.n_fft, 
-                        hop_length=hp.hop_length, 
-                        win_length=hp.win_length
-                        ) # Short-time Fourier transform (STFT)
-    #print(fft_windows.shape)
-    magnitude = np.abs(fft_windows)  # magnitude spectrogram: (1+n_fft//2, T)
-    #print(magnitude.shape)
-    mel_filter = librosa.filters.mel(sr=hp.sr, n_fft=hp.n_fft, n_mels=hp.n_mels) # Create a Filterbank matrix to combine FFT bins into Mel-frequency bins
-    mel = np.dot(mel_filter, magnitude)
+    y = audio.preemphasis(y, hp.preemphasis)
+    #print(y)
+    hp.rescale = False
+    if hp.rescale: # y is too small here.
+        y = audio.rescale(y, hp)
+        #Assert all audio is in [-1, 1]
+        if (y > 1.).any() or (y < -1.).any():
+            raise RuntimeError('wav has invalid value: {}'.format(sound_file))
+    print(y)
+    mag = audio.linear_spectrogram(y, hp)
+    print(mag)
+    print(mag.shape)
+    mel = audio.linear2mel(mag, hp)
     #print(mel)
+    #print(mel.shape)
+    mfcc = audio.mel2mfcc(y, hp)
 
-    '''
-    '''
-    S = librosa.feature.melspectrogram(y=y, sr=hp.sr, n_fft=hp.n_fft, 
-                                   hop_length=hp.hop_length, 
-                                   win_length=hp.win_length,
-                                   n_mels=hp.n_mels,
-                                   power=1) # S == mel when power == 1
-    print(S)
-    assert (mel == S).all()
-    # to decibel
-    mel = 20 * np.log10(np.maximum(1e-5, mel)) # 等价 mel = 2 * librosa.core.power_to_db(mel, amin=1e-5)
-    mag = 20 * np.log10(np.maximum(1e-5, magnitude))
-    # normalize
-    mel = np.clip((mel - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
-    mag = np.clip((mag - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
-	# Transpose
+    mel = audio.amp2db(mel) # 等价 mel = 2 * librosa.core.power_to_db(mel, amin=1e-5)
+    mag = audio.amp2db(mag)
+    mel = audio.normalize(mel, hp)
+    mag = audio.normalize(mag, hp)
     mel = mel.T.astype(np.float32)  # (T, n_mels)
     mag = mag.T.astype(np.float32)  # (T, 1+n_fft//2)
-    '''
-    return mel, mag
-    
-
-
+    return mag, mel, mfcc
 
 if __name__ == "__main__":
     file = os.path.join(src_path, "S133_00324.wav")
-    mel, mag = get_spectrograms(file)
-    wav_data = spectrogram2wav(mag)
-    wav_path = os.path.join(".", "rebuild.wav")
-    sf.write(wav_path, wav_data, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+    mag, mel, mfcc = get_spectrograms(file)
+    wav_data_lin = audio.linear2wav(mag, hp)
+    wav_data_mel = audio.mel2wav(mel, hp)
+    wav_path1 = os.path.join(".", "rebuild_lin.wav")
+    wav_path2 = os.path.join(".", "rebuild_mel.wav")
+    sf.write(wav_path1, wav_data_lin, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+    sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
