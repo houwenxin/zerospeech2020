@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:15:56
 @LastEditors: houwx
-@LastEditTime: 2019-11-19 20:13:27
+@LastEditTime: 2019-11-20 14:18:08
 @Description: 
 '''
 import os
@@ -13,7 +13,7 @@ from hps.hps import hp
 import soundfile as sf
 from utils import audio2 as audio
 
-src_path = "../../databases/english_small/train/unit"
+src_path = "databases/english_small/train/unit"
 trg_path = "./"
 
 def get_spectrograms(sound_file):

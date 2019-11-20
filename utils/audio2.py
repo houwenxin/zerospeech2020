@@ -1,3 +1,11 @@
+# -*- coding: UTF-8 -*-
+'''
+@Author: houwx
+@Date: 2019-11-20 13:39:02
+@LastEditors: houwx
+@LastEditTime: 2019-11-20 13:56:38
+@Description: 
+'''
 import librosa
 import scipy
 import numpy as np
@@ -50,7 +58,7 @@ def amp2db(amp):
 def normalize(y, hp):
     return np.clip((y - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
 # ======================================== Convert =====================================
-def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's raw.
+def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's law.
 	def _invert_spectrogram(spectrogram): # spectrogram: [f, t]
 		return librosa.istft(spectrogram, hp.hop_length, win_length=hp.win_length, window="hann")
 
@@ -65,7 +73,7 @@ def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's raw.
 	return y
 def linear2wav(mag, hp): # Generate wave file from spectrogram
 	mag = mag.T # transpose
-	mag = (np.clip(mag, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db # de-noramlize
+	mag = (np.clip(mag, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db # de-normalize
 	mag = np.power(10.0, mag * 0.05) # to amplitude
 	wav = griffin_lim(mag, hp) # wav reconstruction
 	wav = scipy.signal.lfilter([1], [1, -hp.preemphasis], wav) # de-preemphasis
