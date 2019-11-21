@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-20 13:39:02
 @LastEditors: houwx
-@LastEditTime: 2019-11-20 13:56:38
+@LastEditTime: 2019-11-21 14:22:47
 @Description: 
 '''
 import librosa
@@ -59,11 +59,12 @@ def normalize(y, hp):
     return np.clip((y - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)
 # ======================================== Convert =====================================
 def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's law.
-	def _invert_spectrogram(spectrogram): # spectrogram: [f, t]
+	
+    def _invert_spectrogram(spectrogram): # spectrogram: [f, t]
 		return librosa.istft(spectrogram, hp.hop_length, win_length=hp.win_length, window="hann")
-
-	X_best = copy.deepcopy(spectrogram)
-	for i in range(hp.n_iter):
+	
+    X_best = copy.deepcopy(spectrogram)
+	for _ in range(hp.n_iter):
 		X_t = _invert_spectrogram(X_best)
 		est = librosa.stft(X_t, hp.n_fft, hp.hop_length, win_length=hp.win_length)
 		phase = est / np.maximum(1e-8, np.abs(est))
@@ -71,6 +72,7 @@ def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's law.
 	X_t = _invert_spectrogram(X_best)
 	y = np.real(X_t)
 	return y
+
 def linear2wav(mag, hp): # Generate wave file from spectrogram
 	mag = mag.T # transpose
 	mag = (np.clip(mag, 0, 1) * hp.max_db) - hp.max_db + hp.ref_db # de-normalize
