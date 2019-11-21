@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-11-20 14:25:06
+@LastEditTime: 2019-11-21 14:17:35
 @Description: Hyper-Parameters
 '''
 
@@ -49,6 +49,5 @@ class preprocessing_hyperparams(object):
         # Griffin Lim
         self.power = 1.2 #Only used in G&L inversion, usually values between 1.2 and 1.5 are a good choice.
         self.griffin_lim_iters = 60 #Number of G&L iterations, typically 30 is enough but we use 60 to ensure convergence.
-        
         '''
 hp = preprocessing_hyperparams()
