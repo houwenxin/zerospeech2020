@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-20 13:39:02
 @LastEditors: houwx
-@LastEditTime: 2019-11-22 16:43:56
+@LastEditTime: 2019-11-25 15:35:47
 @Description: 
 '''
 import librosa
@@ -48,6 +48,7 @@ def linear2mel(linear_spectrogram, hp):
     mel = np.dot(mel_filter, linear_spectrogram)
     return mel
 
+
 def mel2mfcc(mel, hp):
     dct_type=2
     norm='ortho'
@@ -57,6 +58,7 @@ def mel2mfcc(mel, hp):
     mfccs = np.concatenate((mfcc, mfcc_delta, mfcc_delta_delta))
     return mfccs
 
+
 def _delta(S):
     delta = librosa.feature.delta(S, width=7)
     return delta
@@ -64,6 +66,7 @@ def _delta(S):
 
 def amp2db(amp):
     return 20 * np.log10(np.maximum(1e-5, amp))
+
 
 def normalize(y, hp):
     return np.clip((y - hp.ref_db + hp.max_db) / hp.max_db, 1e-8, 1)

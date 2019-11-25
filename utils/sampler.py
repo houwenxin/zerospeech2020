@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-22 15:48:19
 @LastEditors: houwx
-@LastEditTime: 2019-11-22 16:45:02
+@LastEditTime: 2019-11-25 18:03:27
 @Description: 
 '''
 import h5py
@@ -31,20 +31,26 @@ class Sampler(object):
 		else:
 			raise NotImplementedError('Invalid dataset.hdf5 name!')
 
-		if make_object == 'all': 
+		if make_object == 'all':
+    		# print(self.f_h5[dset]['S133']['00324'].keys()) # Check data structure.
+			# print(self.f_h5[dset]['S133']['00324']['mel']) # Check data structure.
 			self.speaker_used = sorted(list(self.f_h5[dset].keys()))
 			self.save_speaker2id()
 			print('[Sampler] - Generating stage 1 training segments...')
+
 		elif make_object == 'source':
 			self.get_speaker2id()
 			self.speaker_used = [s for s in sorted(list(self.f_h5[dset].keys())) if s not in self.target_speakers]
 			print('[Sampler] - Generating stage 2 training source segments...')
+
 		elif make_object == 'target':
 			self.get_speaker2id()
 			self.speaker_used = self.target_speakers
 			print('[Sampler] - Generating stage 2 training target segments...')
+
 		else:
 			raise NotImplementedError('Invalid make object!')
+		
 		print('[Sampler] - Speaker used: ', self.speaker_used)
 
 		self.speaker2utts = {speaker : sorted(list(self.f_h5[f'{dset}/{speaker}'].keys())) for speaker in self.speaker_used}
@@ -55,7 +61,8 @@ class Sampler(object):
 	
 	def get_num_utts(self):
 		cnt = 0
-		for speaker_id in self.speaker_used: cnt += len(self.speaker2utts[speaker_id])
+		for speaker_id in self.speaker_used: 
+			cnt += len(self.speaker2utts[speaker_id])
 		return cnt
 		
 
