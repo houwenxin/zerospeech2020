@@ -10,8 +10,10 @@
 import torch
 from torch import optim
 from torch.autograd import Variable
+import torch.nn.functional as F
 
 from model.vqvae.vqvae import VQVAE
+from model.modules import Audio2Mel
 
 class Trainer(object):
     def __init__(self, hps, data_loader, mode="vqvae"):
@@ -22,6 +24,7 @@ class Trainer(object):
         self.build_model()
 
     def build_model(self):
+        self.audio2mel = Audio2Mel().to(self.device)
         self.vqvae = VQVAE(in_channel=80, channel=256).to(self.device)
         if self.mode == "vqvae":
             self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.hps.lr)
@@ -41,35 +44,39 @@ class Trainer(object):
         #    self.model_kept.pop(0)
     def load_model(self, model_path):
         model = torch.load(model_path)
+        return model
 
     def train(self, model_path, target_guided=False):
         if self.mode == "vqvae":
-            for iteration in range(self.hps.vqvae_pretrain_iters):
-                speaker_id, _, X = next(self.data_loader)
-                X = Variable(X.permute(0, 2, 1), requires_grad=True).to(self.device)
-                X_rec, diff = self.vqvae(X)
-                print(X_rec.shape)
-                print(X.shape)
-                loss_rec = torch.mean(torch.abs(X_rec - X))
-                loss_rec.backward()
-                self.vqvae_optimizer.step()
+            best_rec_loss = 1000000
+            for epoch in range(1, self.hps.vqvae_epochs + 1):
+                for iterno, x in enumerate(self.data_loader):
+                    x = x.to(self.device)
+                    x_mel = self.audio2mel(x).detach().to(self.device)
+                    x_rec, _ = self.vqvae(x_mel)
+                    loss_rec = F.l1_loss(x_rec, x_mel)
+                    loss_rec.backward()
+                    self.vqvae_optimizer.step()
 
-                # tb info
-                info = {f'{self.mode}/pre_loss_rec': loss_rec.item()}
-                slot_value = (iteration + 1, self.hps.vqvae_pretrain_iters) + tuple([value for value in info.values()])
-                log = 'pre_AE:[%06d/%06d], loss_rec=%.3f'
-                #print(log % slot_value)
-            self.save_model(model_path, self.mode, self.hps.vqvae_pretrain_iters)
+                    # Print info
+                    info = {f'{self.mode}/pre_loss_rec': loss_rec.item()}
+                    slot_value = (epoch, self.hps.vqvae_epochs, iterno) + tuple([value for value in info.values()])
+                    log = 'VQVAE:[%06d/%06d], iter=%d, loss_rec=%.3f'
+                    print(log % slot_value)
+            #self.save_model(model_path, self.mode, self.hps.vqvae_pretrain_iters)
 
 if __name__ == "__main__":
-    from dataloader import DataLoader, Dataset
+    from dataset import AudioDataset
+    from pathlib import Path
+    from torch.utils.data import DataLoader
     from hps.hps import Hps
     Hps = Hps()
     hps = Hps.get_tuple()
-    dataset = Dataset(h5py_path="./dataset/english/dataset.hdf5",
-            index_path="./dataset/english/index.json",
-            load_mel=True,
-            load_mfcc=False)
-    data_loader = DataLoader(dataset, batch_size=16)
-    trainer = Trainer(hps=hps, data_loader=data_loader)
+    data_path = "./databases/english_small/"
+    rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=22050)
+    #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
+    train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, num_workers=4)
+    #test_data_loader = DataLoader(test_set, batch_size=1)
+    trainer = Trainer(hps=hps, data_loader=train_data_loader, mode="vqvae")
+
     trainer.train("./ckpts/")
