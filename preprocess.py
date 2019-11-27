@@ -168,16 +168,17 @@ if __name__ == "__main__":
 	#wav_path2 = os.path.join(".", "rebuild_mel.wav")
 	#sf.write(wav_path1, wav_data_lin, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
 	#sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
-
-	preprocess(source_path="C:/Users/tslab/Desktop/zerospeech2020/databases/english_small/train/unit/",
-			   target_path="C:/Users/tslab/Desktop/zerospeech2020/databases/english_small/train/voice/",
-			   test_path="C:/Users/tslab/Desktop/zerospeech2020/databases/english_small/test/",
+	'''
+	preprocess(source_path="./databases/english_small/train/unit/",
+			   target_path="./databases/english_small/train/voice/",
+			   test_path="./databases/english_small/test/",
 			   dataset_path="./dataset/english/dataset.hdf5", 
 			   index_path="./dataset/english/index.json", 
 			   index_source_path="./dataset/english/index_src.json", 
 			   index_target_path="./dataset/english/index_trg.json", 
 			   speaker2id_path="./dataset/english/speaker2id.json",
 			   seg_len=128, 
-			   n_samples=200000,
+			   n_samples=200,
 			   dset='train',
 			   remake=False)
+	'''

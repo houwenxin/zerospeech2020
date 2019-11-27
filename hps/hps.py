@@ -6,6 +6,7 @@
 @LastEditTime: 2019-11-21 14:17:35
 @Description: Hyper-Parameters
 '''
+from collections import namedtuple
 
 class preprocessing_hyperparams(object):
     '''
@@ -51,3 +52,59 @@ class preprocessing_hyperparams(object):
         self.griffin_lim_iters = 60 #Number of G&L iterations, typically 30 is enough but we use 60 to ensure convergence.
         '''
 hp = preprocessing_hyperparams()
+
+
+class Hps(object):
+	def __init__(self, path=None):
+		self.hps = namedtuple('hps', [
+			'g_mode',
+			'enc_mode',
+			'load_model_list',
+			'lr',
+			'alpha_dis',
+			'alpha_enc',
+			'beta_dis', 
+			'beta_gen', 
+			'beta_clf',
+			'lambda_',
+			'ns', 
+			'enc_dp', 
+			'dis_dp', 
+			'max_grad_norm',
+			'max_step',
+			'seg_len',
+			'n_samples',
+			'enc_size',
+			'emb_size',
+			'n_speakers',
+			'n_target_speakers',
+			'n_latent_steps',
+			'n_patch_steps', 
+			'batch_size',
+			'lat_sched_iters',
+			'vqvae_pretrain_iters',
+			'dis_pretrain_iters', 
+			'iters',
+			'max_to_keep',
+			]
+		)
+		if not path is None:
+			self.load(path)
+			print('[HPS Loader] - Loading from: ', path)
+		else:
+			print('[HPS Loader] - Using default parameters since no .json file is provided.')
+			default = \
+				['enhanced', 'continues', 1e-4, 1e-5, 1e-4, 0, 0, 0, 10, 0.01, 0.5, 0.1, 5, 5, 128, 400000, 1024, 1024, 102, 2, 5, 0, 32, 50000, 5000, 500, 30000, 60000, 10]
+			self._hps = self.hps._make(default)
+
+	def get_tuple(self):
+		return self._hps
+
+	def load(self, path):
+		with open(path, 'r') as f_json:
+			hps_dict = json.load(f_json)
+		self._hps = self.hps(**hps_dict)
+
+	def dump(self, path):
+		with open(path, 'w') as f_json:
+			json.dump(self._hps._asdict(), f_json, indent=4, separators=(',', ': '))
