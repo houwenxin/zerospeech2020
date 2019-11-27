@@ -162,12 +162,12 @@ if __name__ == "__main__":
 	print(mag.shape)
 	print(mel.shape)
 	print(mfcc.shape)
-	#wav_data_lin = audio.linear2wav(mag, hp)
-	#wav_data_mel = audio.mel2wav(mel, hp)
-	#wav_path1 = os.path.join(".", "rebuild_lin.wav")
-	#wav_path2 = os.path.join(".", "rebuild_mel.wav")
-	#sf.write(wav_path1, wav_data_lin, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-	#sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
+	wav_data_lin = audio.linear2wav(mag, hp)
+	wav_data_mel = audio.mel2wav(mel, hp)
+	wav_path1 = os.path.join(".", "rebuild_lin.wav")
+	wav_path2 = os.path.join(".", "rebuild_mel.wav")
+	sf.write(wav_path1, wav_data_lin, hp.sr, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+	sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
 	'''
 	preprocess(source_path="./databases/english_small/train/unit/",
 			   target_path="./databases/english_small/train/voice/",
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 			   index_source_path="./dataset/english/index_src.json", 
 			   index_target_path="./dataset/english/index_trg.json", 
 			   speaker2id_path="./dataset/english/speaker2id.json",
-			   seg_len=128, 
+			   seg_len=8192, 
 			   n_samples=200,
 			   dset='train',
 			   remake=False)

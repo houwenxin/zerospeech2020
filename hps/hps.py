@@ -18,12 +18,12 @@ class preprocessing_hyperparams(object):
         self.max_duration = 10.0
 
         # signal processing
-        self.sr = 16000 # Sample rate.
+        self.sr = 22050 # 16000 # Sample rate.
         self.n_fft = 1024 # fft points (samples)
-        self.frame_shift = 0.0125 # seconds
-        self.frame_length = 0.05 # seconds
-        self.hop_length = int(self.sr*self.frame_shift) # samples.
-        self.win_length = int(self.sr*self.frame_length) # samples.
+        #self.frame_shift = 0.0125 # seconds
+        #self.frame_length = 0.05 # seconds
+        self.hop_length = 256 #int(self.sr*self.frame_shift) # samples. 200
+        self.win_length = 1024 #int(self.sr*self.frame_length) # samples. 800
         self.n_mels = 80 # Number of Mel banks to generate
         self.n_mfcc = 13 # Number of MFCC to generate
         self.n_iter = 300 # Number of inversion iterations

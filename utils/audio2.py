@@ -38,13 +38,14 @@ def linear_spectrogram(y, hp):
     fft_windows = librosa.stft(y=y, 
                         n_fft=hp.n_fft, 
                         hop_length=hp.hop_length, 
-                        win_length=hp.win_length
+                        win_length=hp.win_length,
+                        center=False,
                         ) # Short-time Fourier transform (STFT)
     magnitude = np.abs(fft_windows)  # magnitude spectrogram: (1+n_fft//2, T)
     return magnitude
 
 def linear2mel(linear_spectrogram, hp):
-    mel_filter = librosa.filters.mel(sr=hp.sr, n_fft=hp.n_fft, n_mels=hp.n_mels) # Create a Filterbank matrix to combine FFT bins into Mel-frequency bins
+    mel_filter = librosa.filters.mel(sr=hp.sr, n_fft=hp.n_fft, n_mels=hp.n_mels, fmin=0.0, fmax=None) # Create a Filterbank matrix to combine FFT bins into Mel-frequency bins
     mel = np.dot(mel_filter, linear_spectrogram)
     return mel
 
@@ -76,12 +77,12 @@ def normalize(y, hp):
 def griffin_lim(spectrogram, hp): # Applies Griffin-Lim's law.
 	
     def _invert_spectrogram(spectrogram): # spectrogram: [f, t]
-        return librosa.istft(spectrogram, hp.hop_length, win_length=hp.win_length, window="hann")
+        return librosa.istft(spectrogram, hp.hop_length, win_length=hp.win_length, window="hann", center=False)
     
     X_best = copy.deepcopy(spectrogram)
     for _ in range(hp.n_iter):
         X_t = _invert_spectrogram(X_best)
-        est = librosa.stft(X_t, hp.n_fft, hp.hop_length, win_length=hp.win_length)
+        est = librosa.stft(X_t, hp.n_fft, hp.hop_length, win_length=hp.win_length, center=False)
         phase = est / np.maximum(1e-8, np.abs(est))
         X_best = spectrogram * phase
     X_t = _invert_spectrogram(X_best)
