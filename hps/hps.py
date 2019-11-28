@@ -6,9 +6,11 @@
 @LastEditTime: 2019-11-21 14:17:35
 @Description: Hyper-Parameters
 '''
+
+import json
 from collections import namedtuple
 
-class preprocessing_hyperparams(object):
+class ProcessingHyperParams(object):
     '''
      @description: Hyper-Parametrs for Preprocessing
      @param {type} 
@@ -51,41 +53,21 @@ class preprocessing_hyperparams(object):
         self.power = 1.2 #Only used in G&L inversion, usually values between 1.2 and 1.5 are a good choice.
         self.griffin_lim_iters = 60 #Number of G&L iterations, typically 30 is enough but we use 60 to ensure convergence.
         '''
-hp = preprocessing_hyperparams()
+hp = ProcessingHyperParams()
 
 
-class Hps(object):
+class HyperParams(object):
 	def __init__(self, path=None):
 		self.hps = namedtuple('hps', [
-			'g_mode',
-			'enc_mode',
-			'load_model_list',
-			'lr',
-			'alpha_dis',
-			'alpha_enc',
-			'beta_dis', 
-			'beta_gen', 
-			'beta_clf',
-			'lambda_',
-			'ns', 
-			'enc_dp', 
-			'dis_dp', 
-			'max_grad_norm',
-			'max_step',
-			'seg_len',
-			'n_samples',
-			'enc_size',
-			'emb_size',
-			'n_speakers',
-			'n_target_speakers',
-			'n_latent_steps',
-			'n_patch_steps', 
-			'batch_size',
-			'lat_sched_iters',
+            'batch_size', # Batch size of training data.
 			'vqvae_epochs',
-			'dis_pretrain_iters', 
-			'iters',
-			'max_to_keep',
+            'max_grad_norm', # 5
+            
+            'max_saved_model', # Max number of saved models.
+            'print_info_every', # Print training info every {} iterations.
+            'run_valid_every', # Run validation during training every {} iterations.
+            'save_model_every', # Save model during training every {} iterations.
+            'start_save_best_model', # Start save best model afer {} iterations.
 			]
 		)
 		if not path is None:
