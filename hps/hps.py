@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-11-29 11:35:17
+@LastEditTime: 2019-12-01 18:04:22
 @Description: Hyper-Parameters
 '''
 
@@ -61,7 +61,6 @@ class HyperParams(object):
 		self.hps = namedtuple('hps', [
             'lr', # Learning rate
             'batch_size', # Batch size of training data.
-			'vqvae_epochs',
             'max_grad_norm', # 5
             
             'seg_len', # Length of segment
@@ -71,6 +70,21 @@ class HyperParams(object):
             'run_valid_every', # Run validation during training every {} iterations.
             'save_model_every', # Save model during training every {} iterations.
             'start_save_best_model', # Start save best model afer {} iterations.
+            
+            # ============== VQVAE =============
+            'vqvae_epochs',
+            'vqvae_n_embed',
+            'vqvae_embed_dim',
+
+            # ============== MelGAN Generator =============
+            'ngf',
+            'n_residual_layers',
+
+            # ============== MelGAN Discriminator =============
+            'num_D', # Number of discriminators
+            'ndf',
+            'n_layers_D',
+            'downsamp_factor',
 			]
 		)
 		if not path is None:
@@ -81,16 +95,22 @@ class HyperParams(object):
 			default = {
                 'lr':1e-4,
                 'batch_size':16, # Batch size of training data.
-                'vqvae_epochs':3000,
                 'max_grad_norm':5, # 5
-                
-                'seg_len':8192,
+                'seg_len':8192, # Segment length loaded from raw wav.
 
-                'max_saved_model':5, # Max number of saved models.
+                'max_saved_model':8, # Max number of saved models.
                 'print_info_every':300, # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':1000, # Save model during training every {} iterations.
+                'save_model_every':3000, # Save model during training every {} iterations.
                 'start_save_best_model':1000, # Start save best model afer {} iterations.
+
+                # ============== VQVAE =============
+                'vqvae_epochs':3000,
+                'vqvae_n_embed':512, # Try 256, 128
+                'vqvae_embed_dim':64,
+
+                # ============== MelGAN Generator =============
+
             }
 			self._hps = self.hps(**default)
 

@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-11-29 11:21:15
+@LastEditTime: 2019-12-01 18:17:45
 @Description: 
 '''
 
@@ -13,9 +13,12 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
+import numpy as np
 
 from model.vqvae.vqvae import VQVAE
 from model.modules import Audio2Mel
+
+from model.melgan.melgan import Generator, Discriminator
 
 class Trainer(object):
     def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae"):
@@ -31,18 +34,34 @@ class Trainer(object):
 
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
-        self.vqvae = VQVAE(in_channel=80, channel=256).to(self.device)
+        self.vqvae = VQVAE(in_channel=80, channel=256, embed_dim=self.hps.vqvae_embed_dim, n_embed=self.hps.vqvae_n_embed).to(self.device)
         if self.mode == "vqvae":
             self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.hps.lr)
+        elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
+            self.netG = Generator(self.hps.vqvae_n_embed, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
+            self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor)
+            self.optG = torch.optim.Adam(self.netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
+            self.optD = torch.optim.Adam(self.netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
         else:
             raise NotImplementedError("Invalid Mode!")
     
 
-    def save_model(self, model_path, name, epoch, iterno, total_iterno):
+    def save_model(self, model_path, name, epoch, iterno, total_iterno, is_best_loss):
         if name == "vqvae":
-            model = self.vqvae.state_dict()
-
-        new_model_path = '{}-{}-{}-{}-{}.pt'.format(model_path, name, epoch, iterno, total_iterno)
+            model = {'vqvae': self.vqvae.state_dict(),
+                    'vqvae_optim': self.vqvae_optimizer.state_dict(),
+                 }
+        elif name == "melgan":
+            model = {
+				'generator': self.netG.state_dict(),
+                'distriminator': self.netD.state_dict(),
+                'generator_optim': self.optG.state_dict(),
+                'discriminator_optim': self.optD.state_dict()
+			}
+        else:
+            raise NotImplementedError("Invalid Model Name!")
+        
+        new_model_path = '{}-{}-{}-{}-{}-{}.pt'.format(model_path, name, epoch, iterno, total_iterno, is_best_loss)
         torch.save(model, new_model_path)
         self.saved_model_list.append(new_model_path)
 
@@ -52,21 +71,33 @@ class Trainer(object):
     
 
     def load_model(self, model_path, name):
+        print('[Trainer] - load model from {}'.format(model_path))
         model = torch.load(model_path)
         if name == "vqvae":
-            self.vqvae.load_state_dict(model)
+            self.vqvae.load_state_dict(model['vqvae'])
+            self.vqvae_optimizer.load_state_dict(model['vqvae_optim'])
+        elif name == "mdelgan":
+            self.netG.load_state_dict(model['generator'])
+            self.netD.load_state_dict(model['discriminator'])
+            self.optG.load_state_dict(model['generator_optim'])
+            self.optD.load_state_dict(model['discriminator_optim'])
+        else:
+            raise NotImplementedError("Invalid Model Name!")
         print(f"{name} loaded.")
+
 
     def _clip_grad(self, net_list, max_grad_norm):
         for net in net_list:
             nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
+
     def train(self, save_model_path):
         total_iterno = -1
         if self.mode == "vqvae":
             loss_rec_best = 10000
+            costs = []
             for epoch in range(1, self.hps.vqvae_epochs + 1):
-                for iterno, x in enumerate(self.train_data_loader):
+                for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
@@ -76,23 +107,35 @@ class Trainer(object):
                     loss_rec.backward()
                     self._clip_grad([self.vqvae], self.hps.max_grad_norm)
                     self.vqvae_optimizer.step()
+
+                    # Update Tensorboard.
+                    costs.append([loss_rec.item()])
+                    self.writer.add_scalar(f'{self.mode}/loss_rec', costs[-1][0], total_iterno)
+
                     # Print info.
                     if iterno % self.hps.print_info_every == 0:
-                        info = {f'{self.mode}/loss_rec': loss_rec.item()}
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, total_iterno) + tuple([value for value in info.values()])
-                        log = 'VQVAE:[%06d/%06d], iter=%d, total_iter=%d, loss_rec=%.3f'
+                        info = {f'{self.mode}/loss_rec': loss_rec.item(),
+                                 '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
+                                }
+                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()])
+                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f'
                         print(log % slot_value)
+                        # Clear costs.
+                        costs = []                              
                     
                     # Save the checkpoint.
                     if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
-                        loss_rec_best = min(loss_rec, loss_rec_best)
-                        self.save_model(model_path, self.mode, epoch, iterno, total_iterno)
-                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, best_loss:{loss_rec_best}")
-                    '''
-                    # Run validation, generate samples and save checkpoint.
-                    if total_iterno % self.hps.run_valid_every == 0:
-                        pass # TODO
-                    '''
+                        #loss_rec_best = min(loss_rec, loss_rec_best)
+                        if loss_rec < loss_rec_best:
+                            is_best_loss = True
+                            loss_rec_best = loss_rec
+                        else:
+                            is_best_loss = False
+                        self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
+                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, is_best_loss:{is_best_loss}")
+        
+        elif self.mode == "melgan":
+            pass # TODO    
 
 
 if __name__ == "__main__":
