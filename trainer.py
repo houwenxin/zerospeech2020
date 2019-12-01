@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-11-25 20:51:21
+@LastEditTime: 2019-11-29 11:21:15
 @Description: 
 '''
 
@@ -18,11 +18,12 @@ from model.vqvae.vqvae import VQVAE
 from model.modules import Audio2Mel
 
 class Trainer(object):
-    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs", mode="vqvae"):
+    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae"):
         self.hps = hps # Hyper-Parameters
         self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
         self.mode = mode
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Using cuda: ", torch.cuda.is_available())
         self.build_model()
         self.saved_model_list = []
         self.max_saved_model = hps.max_saved_model
@@ -83,13 +84,15 @@ class Trainer(object):
                         print(log % slot_value)
                     
                     # Save the checkpoint.
-                    if total_iterno % self.hps.save_model_every == 0 or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
+                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
                         loss_rec_best = min(loss_rec, loss_rec_best)
                         self.save_model(model_path, self.mode, epoch, iterno, total_iterno)
-
+                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, best_loss:{loss_rec_best}")
+                    '''
                     # Run validation, generate samples and save checkpoint.
                     if total_iterno % self.hps.run_valid_every == 0:
                         pass # TODO
+                    '''
 
 
 if __name__ == "__main__":
@@ -100,7 +103,7 @@ if __name__ == "__main__":
     from hps.hps import HyperParams
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    data_path = "./databases/english_small/"
+    data_path = "../../databases/english/"
     rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=22050)
     #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
     train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, num_workers=4)

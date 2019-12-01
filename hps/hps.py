@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-11-21 14:17:35
+@LastEditTime: 2019-11-29 11:35:17
 @Description: Hyper-Parameters
 '''
 
@@ -59,10 +59,13 @@ hp = ProcessingHyperParams()
 class HyperParams(object):
 	def __init__(self, path=None):
 		self.hps = namedtuple('hps', [
+            'lr', # Learning rate
             'batch_size', # Batch size of training data.
 			'vqvae_epochs',
             'max_grad_norm', # 5
             
+            'seg_len', # Length of segment
+
             'max_saved_model', # Max number of saved models.
             'print_info_every', # Print training info every {} iterations.
             'run_valid_every', # Run validation during training every {} iterations.
@@ -75,9 +78,21 @@ class HyperParams(object):
 			print('[HPS Loader] - Loading from: ', path)
 		else:
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
-			default = \
-				['enhanced', 'continues', 1e-4, 0.1, 1e-4, 0, 0, 0, 10, 0.01, 0.5, 0.1, 5, 5, 8192, 8192, 1024, 1024, 102, 2, 5, 0, 32, 16, 5000, 500, 30000, 60000, 10]
-			self._hps = self.hps._make(default)
+			default = {
+                'lr':1e-4,
+                'batch_size':16, # Batch size of training data.
+                'vqvae_epochs':3000,
+                'max_grad_norm':5, # 5
+                
+                'seg_len':8192,
+
+                'max_saved_model':5, # Max number of saved models.
+                'print_info_every':300, # Print training info every {} iterations.
+                'run_valid_every':10, # Run validation during training every {} iterations.
+                'save_model_every':1000, # Save model during training every {} iterations.
+                'start_save_best_model':1000, # Start save best model afer {} iterations.
+            }
+			self._hps = self.hps(**default)
 
 	def get_tuple(self):
 		return self._hps
