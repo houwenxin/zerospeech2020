@@ -60,11 +60,11 @@ class NLayerDiscriminator(nn.Module):
             nn.ReflectionPad1d(7),
             WNConv1d(1, ndf, kernel_size=15),
             nn.LeakyReLU(0.2, True),
-        )
+        ) # (N, 1, T_in) --> (N, ndf, T_in)
 
-        nf = ndf
-        stride = downsampling_factor
-        for n in range(1, n_layers + 1):
+        nf = ndf # # ndf is a model hyperparameter, meaning the final number of feature maps in Discriminator, 16 in paper.
+        stride = downsampling_factor # 4 in paper.
+        for n in range(1, n_layers + 1): # [1, 2, 3, 4]
             nf_prev = nf
             nf = min(nf * stride, 1024)
 
@@ -78,17 +78,17 @@ class NLayerDiscriminator(nn.Module):
                     groups=nf_prev // 4,
                 ),
                 nn.LeakyReLU(0.2, True),
-            )
-
+            ) # (N, nf_prev, T_in) --> (N, nf_prev * 4, (T_in - 1) / stride + 1) TODO Problem??? Maybe should be (N, nf_prev * 4, T_in / 4)
+        # After 4 iterations: (N, nf_prev * 256, T_in / 256)
         nf = min(nf * 2, 1024)
         model["layer_%d" % (n_layers + 1)] = nn.Sequential(
             WNConv1d(nf_prev, nf, kernel_size=5, stride=1, padding=2),
             nn.LeakyReLU(0.2, True),
-        )
+        ) # Shape no change
 
         model["layer_%d" % (n_layers + 2)] = WNConv1d(
             nf, 1, kernel_size=3, stride=1, padding=1
-        )
+        ) # Shape no change TODO Why no ReLU here?
 
         self.model = model
 
@@ -101,13 +101,13 @@ class NLayerDiscriminator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, num_D, ndf, n_layers, downsampling_factor):
+    def __init__(self, num_D, ndf, n_layers, downsampling_factor): # numD = 3, n_layers=4 in paper.
         super().__init__()
         self.model = nn.ModuleDict()
         for i in range(num_D):
             self.model[f"disc_{i}"] = NLayerDiscriminator(
                 ndf, n_layers, downsampling_factor
-            )
+            ) # (N, 1, T_mel * 256) --> (N, 1 * 256, T_mel)
 
         self.downsample = nn.AvgPool1d(4, stride=2, padding=1, count_include_pad=False)
         self.apply(weights_init)
@@ -116,5 +116,5 @@ class Discriminator(nn.Module):
         results = []
         for key, disc in self.model.items():
             results.append(disc(x))
-            x = self.downsample(x)
+            x = self.downsample(x) # (N, 1, T) --> (N, 1, T / 2)
         return results
