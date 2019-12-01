@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 19:01:12
 @LastEditors: houwx
-@LastEditTime: 2019-11-25 20:44:21
+@LastEditTime: 2019-12-01 17:57:28
 @Description: 
 '''
 
@@ -35,6 +35,11 @@ class AudioDataset(torch.utils.data.Dataset):
         self.segment_length = segment_length
         self.audio_files = files_to_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x for x in self.audio_files]
+        
+        speakers = [Path(audio_files).stem for x in self.audio_files]
+        self.speaker2id = self.build_speaker2id(speakers)
+        del speakers
+        
         random.seed(1234)
         random.shuffle(self.audio_files)
         self.augment = augment
@@ -52,9 +57,10 @@ class AudioDataset(torch.utils.data.Dataset):
             audio = F.pad(
                 audio, (0, self.segment_length - audio.size(0)), "constant"
             ).data
-
+        # Get speaker id
+        speaker_id = self.speaker2id[Path(filename).stem]
         # audio = audio / 32768.0
-        return audio.unsqueeze(0)
+        return audio.unsqueeze(0), speaker_id
 
     def __len__(self):
         return len(self.audio_files)
@@ -71,3 +77,9 @@ class AudioDataset(torch.utils.data.Dataset):
             data = data * amplitude
 
         return torch.from_numpy(data).float(), sampling_rate
+    
+    def build_speaker2id(self, speakers):
+        speaker2id = {}
+        for index, speaker in enumerate(speakers):
+            speaker2id[speaker] = index
+        return speaker2id
