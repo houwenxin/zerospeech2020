@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-12-01 18:04:22
+@LastEditTime: 2019-12-02 10:05:03
 @Description: Hyper-Parameters
 '''
 
@@ -76,6 +76,9 @@ class HyperParams(object):
             'vqvae_n_embed',
             'vqvae_embed_dim',
 
+            # ============== MelGAN =============
+            'melgan_epochs',
+            
             # ============== MelGAN Generator =============
             'ngf',
             'n_residual_layers',
@@ -108,7 +111,10 @@ class HyperParams(object):
                 'vqvae_epochs':3000,
                 'vqvae_n_embed':512, # Try 256, 128
                 'vqvae_embed_dim':64,
-
+                
+                # ============== MelGAN =============
+                 'melgan_epochs':3000,
+                 
                 # ============== MelGAN Generator =============
 
             }
