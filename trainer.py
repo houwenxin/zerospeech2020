@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-01 18:17:45
+@LastEditTime: 2019-12-02 10:25:06
 @Description: 
 '''
 
@@ -101,9 +101,12 @@ class Trainer(object):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
-                    x_mel = self.audio2mel(x).detach().to(self.device)
-                    x_rec, _ = self.vqvae(x_mel)
+                    x_mel = self.audio2mel(x).detach()
+                    x_rec, _ = self.vqvae(x_mel.to(self.device))
                     loss_rec = F.l1_loss(x_rec, x_mel)
+                    
+                    # Reset gradients.
+                    self.vqvae.zero_grad()
                     loss_rec.backward()
                     self._clip_grad([self.vqvae], self.hps.max_grad_norm)
                     self.vqvae_optimizer.step()
@@ -135,6 +138,56 @@ class Trainer(object):
                         print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, is_best_loss:{is_best_loss}")
         
         elif self.mode == "melgan":
+            loss_rec_best = 10000
+            costs = []
+            for epoch in range(1, self.hps.melgan_epochs + 1):
+                for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
+                    x = x.to(self.device)
+                    x_enc = self.vqvae.encode(x).detach()
+                    x_pred = self.netG(x_enc.to(self.device))
+
+                    with torch.no_grad():
+                        x_pred_enc = self.vqvae.encode(x_pred.detach())
+                        enc_error = F.l1_loss(x_enc, x_pred_enc).item()
+                    
+                    #######################
+                    # Train Discriminator #
+                    #######################
+                    D_fake_det = self.netD(x_pred.to(self.device).detach())
+                    D_real = self.netD(x.cuda())
+
+                    loss_D = 0
+                    for scale in D_fake_det:
+                        loss_D += F.relu(1 + scale[-1]).mean()
+
+                    for scale in D_real:
+                        loss_D += F.relu(1 - scale[-1]).mean()
+
+                    self.netD.zero_grad()
+                    loss_D.backward()
+                    self.optD.step()
+
+                    ###################
+                    # Train Generator #
+                    ###################
+                    D_fake = self.netD(x_pred.cuda())
+
+                    loss_G = 0
+                    for scale in D_fake:
+                        loss_G += -scale[-1].mean()
+
+                    loss_feat = 0
+                    feat_weights = 4.0 / (self.hps.n_layers_D + 1)
+                    D_weights = 1.0 / self.hps.num_D
+                    wt = D_weights * feat_weights
+                    for i in range(self.hps.num_D):
+                        for j in range(len(D_fake[i]) - 1):
+                            loss_feat += wt * F.l1_loss(D_fake[i][j], D_real[i][j].detach())
+
+                    self.netG.zero_grad()
+                    (loss_G + args.lambda_feat * loss_feat).backward()
+                    self.optG.step()
+
             pass # TODO    
 
 
