@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 19:01:12
 @LastEditors: houwx
-@LastEditTime: 2019-12-01 17:57:28
+@LastEditTime: 2019-12-03 19:53:40
 @Description: 
 '''
 
@@ -36,7 +36,7 @@ class AudioDataset(torch.utils.data.Dataset):
         self.audio_files = files_to_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x for x in self.audio_files]
         
-        speakers = [Path(audio_files).stem for x in self.audio_files]
+        speakers = [Path(x).stem for x in self.audio_files]
         self.speaker2id = self.build_speaker2id(speakers)
         del speakers
         
