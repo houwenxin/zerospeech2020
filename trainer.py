@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-03 16:53:34
+@LastEditTime: 2019-12-03 20:26:40
 @Description: 
 '''
 import time
@@ -69,12 +69,12 @@ class Trainer(object):
 
         if not is_best_loss:
             self.saved_model_list.append(new_model_path)
-            if len(self.saved_model_list) >= self.max_saved_model:
+            if len(self.saved_model_list) > self.max_saved_model:
                 os.remove(self.saved_model_list[0])
                 self.saved_model_list.pop(0)
         else: # Is best loss
             self.best_model_list.append(new_model_path)
-            if len(self.best_model_list) >= self.max_best_model:
+            if len(self.best_model_list) > self.max_best_model:
                 os.remove(self.best_model_list[0])
                 self.best_model_list.pop(0)
         
@@ -131,8 +131,8 @@ class Trainer(object):
                                  '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
                                 }
                         slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
-                                                        (1000 * (time.time() - start) / self.hps.print_info_every)
-                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms / Batch %5.2f'
+                                                        tuple([1000 * (time.time() - start) / self.hps.print_info_every])
+                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
                         # Clear costs.
                         costs = []
@@ -158,7 +158,8 @@ class Trainer(object):
                     total_iterno += 1
 
                     x = x.to(self.device)
-                    x_enc = self.vqvae.encode(x).detach()
+                    x_mel = self.audio2mel(x).detach()
+                    quant_t, quant_b, _, id_t, id_b = self.vqvae.encode(x_mel).detach()
                     x_pred = self.netG(x_enc.to(self.device))
 
                     with torch.no_grad():
@@ -220,8 +221,8 @@ class Trainer(object):
                                  '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
                                 }
                         slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
-                                                        (1000 * (time.time() - start) / self.hps.print_info_every)
-                        log = 'MelGAN | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch %5.2f'
+                                                        tuple([1000 * (time.time() - start) / self.hps.print_info_every])
+                        log = 'MelGAN | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
                         # Clear costs.
                         costs = []
