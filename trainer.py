@@ -3,9 +3,10 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-02 10:25:06
+@LastEditTime: 2019-12-03 16:53:34
 @Description: 
 '''
+import time
 
 import torch
 from torch import optim
@@ -29,7 +30,9 @@ class Trainer(object):
         print("Using cuda: ", torch.cuda.is_available())
         self.build_model()
         self.saved_model_list = []
-        self.max_saved_model = hps.max_saved_model
+        self.best_model_list = []
+        self.max_saved_model = hps.max_saved_model # Max number of saved model.
+        self.max_best_model = hps.max_best_model # Max number of model with best losses.
         self.writer = SummaryWriter(logger_path)
 
     def build_model(self):
@@ -63,16 +66,22 @@ class Trainer(object):
         
         new_model_path = '{}-{}-{}-{}-{}-{}.pt'.format(model_path, name, epoch, iterno, total_iterno, is_best_loss)
         torch.save(model, new_model_path)
-        self.saved_model_list.append(new_model_path)
 
-        if len(self.saved_model_list) >= self.max_saved_model:
-            os.remove(self.saved_model_list[0])
-            self.saved_model_list.pop(0)
-    
+        if not is_best_loss:
+            self.saved_model_list.append(new_model_path)
+            if len(self.saved_model_list) >= self.max_saved_model:
+                os.remove(self.saved_model_list[0])
+                self.saved_model_list.pop(0)
+        else: # Is best loss
+            self.best_model_list.append(new_model_path)
+            if len(self.best_model_list) >= self.max_best_model:
+                os.remove(self.best_model_list[0])
+                self.best_model_list.pop(0)
+        
 
-    def load_model(self, model_path, name):
-        print('[Trainer] - load model from {}'.format(model_path))
-        model = torch.load(model_path)
+    def load_model(self, model_file, name):
+        print('[Trainer] - load model from {}'.format(model_file))
+        model = torch.load(model_file)
         if name == "vqvae":
             self.vqvae.load_state_dict(model['vqvae'])
             self.vqvae_optimizer.load_state_dict(model['vqvae_optim'])
@@ -96,6 +105,7 @@ class Trainer(object):
         if self.mode == "vqvae":
             loss_rec_best = 10000
             costs = []
+            start = time.time()
             for epoch in range(1, self.hps.vqvae_epochs + 1):
                 for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
                     self.vqvae.train() # Set to train mode.
@@ -120,11 +130,13 @@ class Trainer(object):
                         info = {f'{self.mode}/loss_rec': loss_rec.item(),
                                  '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
                                 }
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()])
-                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f'
+                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
+                                                        (1000 * (time.time() - start) / self.hps.print_info_every)
+                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms / Batch %5.2f'
                         print(log % slot_value)
                         # Clear costs.
-                        costs = []                              
+                        costs = []
+                        start = time.time()
                     
                     # Save the checkpoint.
                     if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
@@ -140,8 +152,11 @@ class Trainer(object):
         elif self.mode == "melgan":
             loss_rec_best = 10000
             costs = []
+            self.vqvae.eval()
             for epoch in range(1, self.hps.melgan_epochs + 1):
                 for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
+                    total_iterno += 1
+
                     x = x.to(self.device)
                     x_enc = self.vqvae.encode(x).detach()
                     x_pred = self.netG(x_enc.to(self.device))
@@ -188,7 +203,57 @@ class Trainer(object):
                     (loss_G + args.lambda_feat * loss_feat).backward()
                     self.optG.step()
 
-            pass # TODO    
+                    ######################
+                    # Update tensorboard #
+                    ######################
+                    costs.append([loss_D.item(), loss_G.item(), loss_feat.item(), enc_error])
+
+                    self.writer.add_scalar("melgan_loss/discriminator", costs[-1][0], total_iterno)
+                    self.writer.add_scalar("melgan_loss/generator", costs[-1][1], total_iterno)
+                    self.writer.add_scalar("melgan_loss/feature_matching", costs[-1][2], total_iterno)
+                    self.writer.add_scalar("melgan_loss/enc_reconstruction", costs[-1][3], total_iterno)
+
+
+                     # Print info.
+                    if iterno % self.hps.print_info_every == 0:
+                        info = {f'{self.mode}/loss_rec': loss_rec.item(),
+                                 '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
+                                }
+                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
+                                                        (1000 * (time.time() - start) / self.hps.print_info_every)
+                        log = 'MelGAN | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch %5.2f'
+                        print(log % slot_value)
+                        # Clear costs.
+                        costs = []
+                        start = time.time()
+                    
+                    # Save the checkpoint.
+                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
+                        if loss_rec < loss_rec_best:
+                            is_best_loss = True
+                            loss_rec_best = loss_rec
+                        else:
+                            is_best_loss = False
+                            
+                        self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
+                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, is_best_loss:{is_best_loss}")
+                        '''
+                        st = time.time()
+                        with torch.no_grad():
+                            for i, (voc, _) in enumerate(zip(test_voc, test_audio)):
+                                pred_audio = self.netG(voc)
+                                pred_audio = pred_audio.squeeze().cpu()
+                                save_sample(root / ("generated_%d.wav" % i), 22050, pred_audio)
+                                self.writer.add_audio(
+                                    "generated/sample_%d.wav" % i,
+                                    pred_audio,
+                                    epoch,
+                                    sample_rate=22050,
+                                )
+
+                        print("Took %5.4fs to generate samples" % (time.time() - st))
+                        '''
+                        print("-" * 100)
 
 
 if __name__ == "__main__":

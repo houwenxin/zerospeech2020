@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-12-02 10:05:03
+@LastEditTime: 2019-12-03 14:14:30
 @Description: Hyper-Parameters
 '''
 
@@ -66,6 +66,7 @@ class HyperParams(object):
             'seg_len', # Length of segment
 
             'max_saved_model', # Max number of saved models.
+            'max_best_model', # Max number of saved best-loss models.
             'print_info_every', # Print training info every {} iterations.
             'run_valid_every', # Run validation during training every {} iterations.
             'save_model_every', # Save model during training every {} iterations.
@@ -101,7 +102,8 @@ class HyperParams(object):
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
-                'max_saved_model':8, # Max number of saved models.
+                'max_saved_model':5, # Max number of saved models.
+                'max_best_model':3, # Max number of saved best-loss models.
                 'print_info_every':300, # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
                 'save_model_every':3000, # Save model during training every {} iterations.
