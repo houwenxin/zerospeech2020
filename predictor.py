@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-12-03 16:55:41
 @LastEditors: houwx
-@LastEditTime: 2019-12-03 17:49:48
+@LastEditTime: 2019-12-03 19:54:41
 @Description: 
 '''
 import torch
@@ -26,7 +26,7 @@ class Predictor(object):
     def load_model(self, vqvae_model, melgan_model=None):
         print('[Predictor] - load VQVAE model from {} - load MelGAN model from {}'.format(vqvae_model, melgan_model))
         vqvae_model = torch.load(vqvae_model)
-        self.vqvae = self.vqvae.load_state_dict(vqvae_model['vqvae'])
+        self.vqvae.load_state_dict(vqvae_model['vqvae'])
         self.vqvae.eval()
         if melgan_model:
             melgan_model = torch.load(melgan_model)
@@ -39,7 +39,8 @@ class Predictor(object):
     def encode(self, enc_save_path):
         for iterno, (x, speaker_id) in enumerate(self.test_data_loader):
             x = x.to(self.device)
-            x_enc = self.vqvae.encode(x).squeeze()
+            x_mel = self.audio2mel(x)
+            x_enc = self.vqvae.encode(x_mel).squeeze()
             print(x_enc)
             return
             
@@ -59,7 +60,9 @@ if __name__ == "__main__":
     data_path = "../../databases/"
     dataset_name = "english"
     data_path = os.path.join(data_path, dataset_name)
-    test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
+    test_set = AudioDataset(audio_files=Path(data_path) / "gan_train_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
     test_data_loader = DataLoader(test_set, batch_size=1)
     predictor = Predictor(hps, test_data_loader)
+    vqvae_model = "./model-vqvae-1134-131-672000.pt"
+    predictor.load_model(vqvae_model)
     predictor.encode(dataset_name)
