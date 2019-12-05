@@ -76,6 +76,7 @@ class HyperParams(object):
             'vqvae_epochs',
             'vqvae_n_embed',
             'vqvae_embed_dim',
+            'loss_latent_weight', # Weight of commitment loss: 0.25 in paper VQVAE-2
 
             # ============== MelGAN =============
             'melgan_epochs',
@@ -97,8 +98,8 @@ class HyperParams(object):
 		else:
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
 			default = {
-                'lr':1e-4,
-                'batch_size':16, # Batch size of training data.
+                'lr':2e-4,
+                'batch_size':32, # Batch size of training data.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
@@ -113,6 +114,7 @@ class HyperParams(object):
                 'vqvae_epochs':3000,
                 'vqvae_n_embed':256, #512, # Try 256, 128
                 'vqvae_embed_dim':64,
+                'loss_latent_weight':0.25, # Weight of commitment loss: 0.25 in paper VQVAE-2
                 
                 # ============== MelGAN =============
                  'melgan_epochs':3000,

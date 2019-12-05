@@ -13,8 +13,9 @@ from torch import optim
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 import numpy as np
+from tqdm import tqdm
 
 from model.vqvae.vqvae import VQVAE
 from model.modules import Audio2Mel
@@ -23,17 +24,21 @@ from model.melgan.melgan import Generator, Discriminator
 
 class Trainer(object):
     def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae"):
-        self.hps = hps # Hyper-Parameters
-        self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
-        self.mode = mode
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using cuda: ", torch.cuda.is_available())
+
+        self.hps = hps # Hyper-Parameters
+        #self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
+        self.train_data_loader = tqdm(train_data_loader, total=len(train_data_loader)) # Use tqdm progress bar
+        self.mode = mode
         self.build_model()
         self.saved_model_list = []
         self.best_model_list = []
         self.max_saved_model = hps.max_saved_model # Max number of saved model.
         self.max_best_model = hps.max_best_model # Max number of model with best losses.
-        self.writer = SummaryWriter(logger_path)
+        #self.writer = SummaryWriter(logger_path)
+        self.criterion = nn.MSELoss() # Use MSE Loss
+        
 
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
@@ -107,47 +112,66 @@ class Trainer(object):
             costs = []
             start = time.time()
             for epoch in range(1, self.hps.vqvae_epochs + 1):
+                
                 for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
-                    x_rec, _ = self.vqvae(x_mel.to(self.device))
-                    loss_rec = F.l1_loss(x_rec, x_mel)
-                    
+                    x_rec, loss_latent = self.vqvae(x_mel.to(self.device)) 
+                    # loss_latent: commitment loss, to make encodings get close to codebooks (quantize.detach() - input).pow(2).mean()
+                    loss_rec = self.criterion(x_rec, x_mel) # Loss of reconstruction.
+                    # Impotant: loss should be the combination of reconstruction loss and commitment loss in VQVAE.
+                    loss_vqvae = loss_rec + self.hps.loss_latent_weight * loss_latent
+
                     # Reset gradients.
                     self.vqvae.zero_grad()
-                    loss_rec.backward()
+                    loss_vqvae.backward()
                     self._clip_grad([self.vqvae], self.hps.max_grad_norm)
                     self.vqvae_optimizer.step()
 
+                    # Save losses
+                    costs.append([loss_rec.item(), loss_latent.item()])
+                    mean_loss_rec = np.array(costs).mean(0)[0]
+                    mean_loss_latent = np.array(costs).mean(0)[1]
                     # Update Tensorboard.
-                    costs.append([loss_rec.item()])
-                    self.writer.add_scalar(f'{self.mode}/loss_rec', costs[-1][0], total_iterno)
+                    info = {
+                        f'{self.mode}/loss_rec': costs[-1][0],
+                        f'{self.mode}/loss_latent': costs[-1][1],
+                        f'{self.mode}/mean_loss_rec': mean_loss_rec,
+                        f'{self.mode}/mean_loss_latent': mean_loss_latent,
+                    }
+                    '''
+                    for tag, value in info.items():
+                        self.writer.add_scalar(tag, value, total_iterno)
+                    '''
+                    self.train_data_loader.set_description(
+                        (
+                            f'epochs: {epoch}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
+                        )
+                    )
 
                     # Print info.
                     if iterno % self.hps.print_info_every == 0:
-                        info = {f'{self.mode}/loss_rec': loss_rec.item(),
-                                 '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
-                                }
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
+                        
+                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()[-2:]]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch: %5.2f'
+                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
                         # Clear costs.
                         costs = []
                         start = time.time()
                     
                     # Save the checkpoint.
-                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
+                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best):
                         #loss_rec_best = min(loss_rec, loss_rec_best)
-                        if loss_rec < loss_rec_best:
+                        if mean_loss_rec < loss_rec_best:
                             is_best_loss = True
-                            loss_rec_best = loss_rec
+                            loss_rec_best = mean_loss_rec
                         else:
                             is_best_loss = False
                         self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, is_best_loss:{is_best_loss}")
+                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
         
         elif self.mode == "melgan":
             loss_rec_best = 10000
@@ -216,7 +240,7 @@ class Trainer(object):
 
 
                      # Print info.
-                    if iterno % self.hps.print_info_every == 0:
+                    if total_iterno % self.hps.print_info_every == 0:
                         info = {f'{self.mode}/loss_rec': loss_rec.item(),
                                  '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
                                 }
@@ -265,10 +289,11 @@ if __name__ == "__main__":
     from hps.hps import HyperParams
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    data_path = "../../databases/english/"
-    rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=22050)
+    #data_path = "../../databases/english/" # On lab server.
+    data_path = "./databases/english_small/" # On my own PC.
+    rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
     #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
-    train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, num_workers=4)
+    train_data_loader = DataLoader(rec_train_dataset, batch_size=2, num_workers=4)#hps.batch_size, num_workers=4)
     #test_data_loader = DataLoader(test_set, batch_size=1)
     trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae")
     model_path = os.path.join("ckpts", "model")

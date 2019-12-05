@@ -1,6 +1,7 @@
 import numpy as np
 import torch.nn as nn
-from modules import weights_init, WNConv1d, WNConvTranspose1d, ResnetBlock
+from model.melgan.modules import WNConv1d, WNConvTranspose1d, ResnetBlock
+from model.modules import weights_init
 
 class Generator(nn.Module):
     def __init__(self, input_size, ngf, n_residual_layers):
