@@ -3,11 +3,12 @@
 @Author: houwx
 @Date: 2019-11-28 09:08:10
 @LastEditors: houwx
-@LastEditTime: 2019-12-05 11:26:41
+@LastEditTime: 2019-12-06 09:23:13
 @Description: 
 '''
 import torch.nn as nn
-from model.vqvae.modules import ResBlock, weights_init
+from model.vqvae.modules import ResBlock
+from model.modules import weights_init
 
 # Mel Encoder Inspired by: https://github.com/swasun/VQ-VAE-Speech
 # Code Adapted from: https://github.com/rosinality/vq-vae-2-pytorch
