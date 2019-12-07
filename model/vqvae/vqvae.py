@@ -76,26 +76,28 @@ class VQVAE(nn.Module):
         self,
         in_channel=3,
         channel=128,
+        n_res_block=2,
+        n_res_channel=32,
         embed_dim=64,
         n_embed=512,
         decay=0.99,
     ):
         super(VQVAE, self).__init__()
         # enc_b: Bottom Encoder & enc_t: Top Encoder
-        self.enc_b = Encoder(in_channel, channel, stride=4) 
-        self.enc_t = Encoder(channel, channel, stride=2)
+        self.enc_b = Encoder(in_channel, channel, stride=4, n_res_block=n_res_block) 
+        self.enc_t = Encoder(channel, channel, stride=2, n_res_block=n_res_block)
         self.quantize_conv_t = nn.Conv1d(in_channels=channel, out_channels=embed_dim, kernel_size=1)
 
         self.quantize_t = Quantize(embed_dim, n_embed)
         
-        self.dec_t = Decoder(in_channel=embed_dim, channel=channel, out_channel=embed_dim, stride=2)
+        self.dec_t = Decoder(in_channel=embed_dim, channel=channel, out_channel=embed_dim, stride=2, n_res_block=n_res_block)
 
         self.quantize_conv_b = nn.Conv1d(embed_dim + channel, embed_dim, 1)
         self.quantize_b = Quantize(embed_dim, n_embed)
         self.upsample_t = nn.ConvTranspose1d(
             embed_dim, embed_dim, 4, stride=2, padding=1
         )
-        self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4)
+        self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
         
 
     def forward(self, input):
@@ -124,13 +126,18 @@ class VQVAE(nn.Module):
         diff_b = diff_b.unsqueeze(0)
 
         return quant_t, quant_b, diff_t + diff_b, id_t, id_b
-
+    
     def decode(self, quant_t, quant_b):
         upsample_t = self.upsample_t(quant_t) # Return: (B, embed_dim, T/4)
         quant = torch.cat([upsample_t, quant_b], 1) # Return: (B, 2 * embed_dim, T/4)
         dec = self.dec(quant) # Return: (B, in_channel, T/4)
         return dec
 
+    def get_encoding(self, quant_t, quant_b):
+        # Note(houwx): to combine the encodings
+        upsample_t = self.upsample_t(quant_t) # Return: (B, embed_dim, T/4)
+        return torch.cat([upsample_t, quant_b], 1) # Return: (B, 2 * embed_dim, T/4)
+    
     def decode_code(self, code_t, code_b):
         quant_t = self.quantize_t.embed_code(code_t)
         quant_t = quant_t.permute(0, 2, 1)

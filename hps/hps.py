@@ -98,7 +98,7 @@ class HyperParams(object):
 		else:
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
 			default = {
-                'lr':2e-4,
+                'lr':4e-4,
                 'batch_size':32, # Batch size of training data.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.

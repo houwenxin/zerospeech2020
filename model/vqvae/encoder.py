@@ -10,57 +10,36 @@ import torch.nn as nn
 from model.vqvae.modules import ResBlock
 from model.modules import weights_init
 
-# Mel Encoder Inspired by: https://github.com/swasun/VQ-VAE-Speech
 # Code Adapted from: https://github.com/rosinality/vq-vae-2-pytorch
 class MelEncoder(nn.Module):
-    def __init__(self, in_channel, channel, stride):
+    def __init__(self, in_channel, channel, stride, n_res_block=3):
         super(MelEncoder, self).__init__()
         # Input: (B, n_mel, T)
         if stride == 2:
             blocks = [
-                nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                # After: (B, channel, T)
-
-                ResBlock(channel, channel),
-                nn.LeakyReLU(inplace=True),
-                # After: (B, channel, T)
-
-                nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
-                nn.BatchNorm1d(channel),
+                nn.ReLU(inplace=True),
                 # After: (B, channel, T/2)
-
-                ResBlock(channel, channel),
-                ResBlock(channel, channel),
-                
-                nn.LeakyReLU(inplace=True),
-                # After: (B, channel, T/2)
+                nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
             ]
         elif stride == 4:
             blocks = [
-                nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
+                nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                # After: (B, channel, T)
-
-                ResBlock(channel, channel),
-                nn.LeakyReLU(inplace=True),
-                # After: (B, channel, T)
-
-                nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
-                nn.BatchNorm1d(channel),
-                nn.LeakyReLU(inplace=True),
+                nn.ReLU(inplace=True),
                 # After: (B, channel, T/2)
-                
+
                 nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
+                nn.ReLU(inplace=True),
                 # After: (B, channel, T/4)
-                
-                ResBlock(channel, channel),
-                ResBlock(channel, channel),
-
-                nn.LeakyReLU(inplace=True),
-                # After: (B, channel, T/4)
+                nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
             ]
+
+        for _ in range(n_res_block):
+            blocks.append(ResBlock(channel, channel))
+        blocks.append(nn.ReLU(inplace=True))
 
         self.blocks = nn.Sequential(*blocks)
         self.apply(weights_init)

@@ -22,6 +22,8 @@ from model.modules import Audio2Mel
 
 from model.melgan.melgan import Generator, Discriminator
 
+torch.manual_seed(1)
+
 class Trainer(object):
     def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae"):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,22 +31,25 @@ class Trainer(object):
 
         self.hps = hps # Hyper-Parameters
         #self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
-        self.train_data_loader = tqdm(train_data_loader, total=len(train_data_loader)) # Use tqdm progress bar
+        self.train_data_loader = train_data_loader # Use tqdm progress bar
         self.mode = mode
-        self.build_model()
+        self.lr = self.hps.lr # Initial learning rate
         self.saved_model_list = []
         self.best_model_list = []
         self.max_saved_model = hps.max_saved_model # Max number of saved model.
         self.max_best_model = hps.max_best_model # Max number of model with best losses.
         #self.writer = SummaryWriter(logger_path)
         self.criterion = nn.MSELoss() # Use MSE Loss
-        
+        self.build_model()
 
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
-        self.vqvae = VQVAE(in_channel=80, channel=256, embed_dim=self.hps.vqvae_embed_dim, n_embed=self.hps.vqvae_n_embed).to(self.device)
+        self.vqvae = VQVAE(in_channel=80, channel=512, 
+                            embed_dim=self.hps.vqvae_embed_dim, 
+                            n_embed=self.hps.vqvae_n_embed
+                            ).to(self.device)
         if self.mode == "vqvae":
-            self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.hps.lr)
+            self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.lr)
         elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
             self.netG = Generator(self.hps.vqvae_n_embed, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
             self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor)
@@ -53,7 +58,6 @@ class Trainer(object):
         else:
             raise NotImplementedError("Invalid Mode!")
     
-
     def save_model(self, model_path, name, epoch, iterno, total_iterno, is_best_loss):
         if name == "vqvae":
             model = {'vqvae': self.vqvae.state_dict(),
@@ -104,6 +108,10 @@ class Trainer(object):
         for net in net_list:
             nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
+    def _halve_lr(self, optimizer):
+        self.lr /= 2
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = self.lr
 
     def train(self, save_model_path):
         total_iterno = -1
@@ -112,8 +120,8 @@ class Trainer(object):
             costs = []
             start = time.time()
             for epoch in range(1, self.hps.vqvae_epochs + 1):
-                
-                for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
+                train_data_loader = tqdm(self.train_data_loader, total=len(self.train_data_loader))
+                for iterno, (x, _) in enumerate(train_data_loader):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
@@ -129,6 +137,9 @@ class Trainer(object):
                     loss_vqvae.backward()
                     self._clip_grad([self.vqvae], self.hps.max_grad_norm)
                     self.vqvae_optimizer.step()
+                    # Schedule learning rate.
+                    if total_iterno in [4e5, 6e5, 8e5]:
+                        self._halve_lr(self.vqvae_optimizer)
 
                     # Save losses
                     costs.append([loss_rec.item(), loss_latent.item()])
@@ -145,18 +156,18 @@ class Trainer(object):
                     for tag, value in info.items():
                         self.writer.add_scalar(tag, value, total_iterno)
                     '''
-                    self.train_data_loader.set_description(
+                    train_data_loader.set_description(
                         (
                             f'epochs: {epoch}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
                         )
                     )
 
                     # Print info.
-                    if iterno % self.hps.print_info_every == 0:
+                    if total_iterno > 1 and total_iterno % self.hps.print_info_every == 0:
                         
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()[-2:]]) + \
+                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()][-2:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'VQVAE | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
+                        log = '\nVQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
                         # Clear costs.
                         costs = []
