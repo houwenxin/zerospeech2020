@@ -12,3 +12,6 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 3. ZeroSpeech-TTS-without-T: https://github.com/andi611/ZeroSpeech-TTS-without-T  
 4. VQ-VAE-Speech: https://github.com/swasun/VQ-VAE-Speech  
 5. pytorch-vqvae: https://github.com/houwenxin/pytorch-vqvae  
+
+### References:
+1. [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
