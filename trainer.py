@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-03 20:26:40
+@LastEditTime: 2019-12-08 16:26:46
 @Description: 
 '''
 import time
@@ -140,6 +140,7 @@ class Trainer(object):
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
                     if self.add_speaker_id:
+                        speaker_id = speaker_id.to(self.device)
                         x_rec, loss_latent = self.vqvae(x_mel.to(self.device), speaker_id=speaker_id)
                     else:
                         x_rec, loss_latent = self.vqvae(x_mel.to(self.device))
@@ -185,18 +186,20 @@ class Trainer(object):
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
                         log = '\nVQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
+                        # Save best models
+                        if total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best:
+                            loss_rec_best = mean_loss_rec
+                            is_best_loss = True
+                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
+                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                         # Clear costs.
                         costs = []
                         start = time.time()
                     
                     # Save the checkpoint.
-                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best):
+                    if total_iterno > 1 and total_iterno % self.hps.save_model_every == 0:
                         #loss_rec_best = min(loss_rec, loss_rec_best)
-                        if mean_loss_rec < loss_rec_best:
-                            is_best_loss = True
-                            loss_rec_best = mean_loss_rec
-                        else:
-                            is_best_loss = False
+                        is_best_loss = False
                         self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
                         print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
         
