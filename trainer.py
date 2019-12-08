@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-08 16:26:46
+@LastEditTime: 2019-12-08 16:54:48
 @Description: 
 '''
 import time
@@ -186,12 +186,6 @@ class Trainer(object):
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
                         log = '\nVQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
                         print(log % slot_value)
-                        # Save best models
-                        if total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best:
-                            loss_rec_best = mean_loss_rec
-                            is_best_loss = True
-                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                         # Clear costs.
                         costs = []
                         start = time.time()
@@ -199,9 +193,16 @@ class Trainer(object):
                     # Save the checkpoint.
                     if total_iterno > 1 and total_iterno % self.hps.save_model_every == 0:
                         #loss_rec_best = min(loss_rec, loss_rec_best)
-                        is_best_loss = False
-                        self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                        # Save best models
+                        if total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best:
+                            loss_rec_best = mean_loss_rec
+                            is_best_loss = True
+                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
+                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                        else:
+                            is_best_loss = False
+                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
+                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
         
         elif self.mode == "melgan":
             loss_rec_best = 10000
@@ -324,7 +325,7 @@ if __name__ == "__main__":
     rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
     num_speaker = rec_train_dataset.get_speaker_num()
     #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
-    train_data_loader = DataLoader(rec_train_dataset, batch_size=3, num_workers=4)#hps.batch_size, num_workers=4)
+    train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
     #test_data_loader = DataLoader(test_set, batch_size=1)
     trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae", add_speaker_id=True, num_speaker=num_speaker)
     model_path = os.path.join("ckpts", "model")

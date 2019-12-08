@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-12-08 16:31:46
+@LastEditTime: 2019-12-08 16:59:17
 @Description: Hyper-Parameters
 '''
 
@@ -99,16 +99,16 @@ class HyperParams(object):
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
 			default = {
                 'lr':4e-4,
-                'batch_size':32, # Batch size of training data.
+                'batch_size':64, # Batch size of training data.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
                 'max_saved_model':5, # Max number of saved models.
                 'max_best_model':3, # Max number of saved best-loss models.
-                'print_info_every':3158,#300, # Print training info every {} iterations.
+                'print_info_every':149,#300, # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':3000, # Save model during training every {} iterations.
-                'start_save_best_model':1000, # Start save best model afer {} iterations.
+                'save_model_every':149, # Save model during training every {} iterations.
+                'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
                 'vqvae_epochs':3000,
