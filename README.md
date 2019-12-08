@@ -19,5 +19,6 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 + MelGAN: Generative Adversarial Networks for Conditional Waveform Synthesis. https://arxiv.org/pdf/1910.06711.pdf  
 + Generating Diverse High-Fidelity Images with VQ-VAE-2. https://arxiv.org/pdf/1906.00446.pdf  
 + Unsupervised speech representation learning using WaveNet autoencoders. https://arxiv.org/pdf/1901.08810.pdf  
-+ [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
++ [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING. https://tsuchhiii.github.io/pdf/paper/18_icassp_tsuchiya.pdf  
++ [Possible] SPEAKER-INVARIANT TRAINING VIA ADVERSARIAL LEARNING. https://www.microsoft.com/en-us/research/uploads/prod/2018/04/ICASSP2018_Speaker_Invariant_Training.pdf
 
