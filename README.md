@@ -14,4 +14,7 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 5. pytorch-vqvae: https://github.com/houwenxin/pytorch-vqvae  
 
 ### References:
-1. [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
+· Unsupervised End-to-End Learning of Discrete Linguistic Units for Voice. https://arxiv.org/pdf/1905.11563.pdf
+· VQVAE Unsupervised Unit Discovery and Multi-scale Code2Spec Inverter. https://arxiv.org/pdf/1905.11449.pdf
+· [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
+
