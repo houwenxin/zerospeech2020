@@ -18,5 +18,6 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 + VQVAE Unsupervised Unit Discovery and Multi-scale Code2Spec Inverter. https://arxiv.org/pdf/1905.11449.pdf  
 + MelGAN: Generative Adversarial Networks for Conditional Waveform Synthesis. https://arxiv.org/pdf/1910.06711.pdf  
 + Generating Diverse High-Fidelity Images with VQ-VAE-2. https://arxiv.org/pdf/1906.00446.pdf  
++ Unsupervised speech representation learning using WaveNet autoencoders. https://arxiv.org/pdf/1901.08810.pdf  
 + [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
 
