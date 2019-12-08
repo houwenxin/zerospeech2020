@@ -81,6 +81,8 @@ class VQVAE(nn.Module):
         embed_dim=64,
         n_embed=512,
         decay=0.99,
+        add_speaker_id=False,
+        num_speaker=-1,
     ):
         super(VQVAE, self).__init__()
         # enc_b: Bottom Encoder & enc_t: Top Encoder
@@ -97,13 +99,20 @@ class VQVAE(nn.Module):
         self.upsample_t = nn.ConvTranspose1d(
             embed_dim, embed_dim, 4, stride=2, padding=1
         )
-        self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
-        
+        self.add_speaker_id=add_speaker_id
+        if self.add_speaker_id:
+            self.spk_embed = nn.Embedding(num_speaker, embed_dim // 2)
+            self.dec = Decoder(in_channel=embed_dim + embed_dim + embed_dim // 2, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
+        else:
+            self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
 
-    def forward(self, input):
+    def forward(self, input, speaker_id=-1):
         quant_t, quant_b, diff, _, _ = self.encode(input)
-        dec = self.decode(quant_t, quant_b)
-
+        if self.add_speaker_id:
+            assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
+            dec = self.decode(quant_t, quant_b, speaker_id)
+        else:
+            dec = self.decode(quant_t, quant_b)
         return dec, diff
 
     def encode(self, input):
@@ -127,9 +136,17 @@ class VQVAE(nn.Module):
 
         return quant_t, quant_b, diff_t + diff_b, id_t, id_b
     
-    def decode(self, quant_t, quant_b):
+    def decode(self, quant_t, quant_b, speaker_id=-1):
         upsample_t = self.upsample_t(quant_t) # Return: (B, embed_dim, T/4)
         quant = torch.cat([upsample_t, quant_b], 1) # Return: (B, 2 * embed_dim, T/4)
+        if self.add_speaker_id:
+            assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
+            spk = self.spk_embed(speaker_id)
+            spk = spk.view(spk.size(0), spk.size(1), 1)  # Return: (B, embed_dim // 2, 1)
+            spk_expand = spk.expand(spk.size(0), spk.size(1), quant.size(2))
+            #print("\n", spk_expand.shape)
+            quant = torch.cat((quant, spk_expand), dim=1) 
+            
         dec = self.dec(quant) # Return: (B, in_channel, T/4)
         return dec
 

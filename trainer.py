@@ -25,7 +25,7 @@ from model.melgan.melgan import Generator, Discriminator
 torch.manual_seed(1)
 
 class Trainer(object):
-    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae"):
+    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae", add_speaker_id=False, num_speaker=-1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using cuda: ", torch.cuda.is_available())
 
@@ -33,6 +33,12 @@ class Trainer(object):
         #self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
         self.train_data_loader = train_data_loader # Use tqdm progress bar
         self.mode = mode
+
+        self.add_speaker_id = add_speaker_id
+        if self.add_speaker_id: 
+            assert num_speaker != -1, "num_speaker should be given."
+            self.num_speaker = num_speaker
+        
         self.lr = self.hps.lr # Initial learning rate
         self.saved_model_list = []
         self.best_model_list = []
@@ -44,10 +50,17 @@ class Trainer(object):
 
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
-        self.vqvae = VQVAE(in_channel=80, channel=512, 
-                            embed_dim=self.hps.vqvae_embed_dim, 
-                            n_embed=self.hps.vqvae_n_embed
-                            ).to(self.device)
+        if self.add_speaker_id:
+            self.vqvae = VQVAE(in_channel=80, channel=512, 
+                                embed_dim=self.hps.vqvae_embed_dim, 
+                                n_embed=self.hps.vqvae_n_embed,
+                                add_speaker_id=True, num_speaker=self.num_speaker,
+                                ).to(self.device)
+        else:
+            self.vqvae = VQVAE(in_channel=80, channel=512, 
+                                embed_dim=self.hps.vqvae_embed_dim, 
+                                n_embed=self.hps.vqvae_n_embed,
+                                ).to(self.device)
         if self.mode == "vqvae":
             self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.lr)
         elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
@@ -121,12 +134,15 @@ class Trainer(object):
             start = time.time()
             for epoch in range(1, self.hps.vqvae_epochs + 1):
                 train_data_loader = tqdm(self.train_data_loader, total=len(self.train_data_loader))
-                for iterno, (x, _) in enumerate(train_data_loader):
+                for iterno, (x, speaker_id) in enumerate(train_data_loader):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
-                    x_rec, loss_latent = self.vqvae(x_mel.to(self.device)) 
+                    if self.add_speaker_id:
+                        x_rec, loss_latent = self.vqvae(x_mel.to(self.device), speaker_id=speaker_id)
+                    else:
+                        x_rec, loss_latent = self.vqvae(x_mel.to(self.device))
                     # loss_latent: commitment loss, to make encodings get close to codebooks (quantize.detach() - input).pow(2).mean()
                     loss_rec = self.criterion(x_rec, x_mel) # Loss of reconstruction.
                     # Impotant: loss should be the combination of reconstruction loss and commitment loss in VQVAE.
@@ -303,9 +319,10 @@ if __name__ == "__main__":
     #data_path = "../../databases/english/" # On lab server.
     data_path = "./databases/english_small/" # On my own PC.
     rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
+    num_speaker = rec_train_dataset.get_speaker_num()
     #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
-    train_data_loader = DataLoader(rec_train_dataset, batch_size=2, num_workers=4)#hps.batch_size, num_workers=4)
+    train_data_loader = DataLoader(rec_train_dataset, batch_size=3, num_workers=4)#hps.batch_size, num_workers=4)
     #test_data_loader = DataLoader(test_set, batch_size=1)
-    trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae")
+    trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae", add_speaker_id=True, num_speaker=num_speaker)
     model_path = os.path.join("ckpts", "model")
     trainer.train(save_model_path=model_path)

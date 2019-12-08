@@ -83,3 +83,6 @@ class AudioDataset(torch.utils.data.Dataset):
         for index, speaker in enumerate(speakers):
             speaker2id[speaker] = index
         return speaker2id
+    
+    def get_speaker_num(self):
+        return len(self.speaker2id)
