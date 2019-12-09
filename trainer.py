@@ -48,6 +48,9 @@ class Trainer(object):
         self.criterion = nn.MSELoss() # Use MSE Loss
         self.build_model()
 
+        self.accum_epochs = 0 # For reload training.
+        self.accum_iterno = 0 # For reload training.
+
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
         if self.add_speaker_id:
@@ -114,6 +117,10 @@ class Trainer(object):
             self.optD.load_state_dict(model['discriminator_optim'])
         else:
             raise NotImplementedError("Invalid Model Name!")
+        
+        import os
+        self.accum_epochs = int(os.path.basename(model_file).split('-')[2]) - 1
+        self.accum_iterno = int(os.path.basename(model_file).split('-')[4])
         print(f"{name} loaded.")
 
 
@@ -154,8 +161,12 @@ class Trainer(object):
                     loss_vqvae.backward()
                     self._clip_grad([self.vqvae], self.hps.max_grad_norm)
                     self.vqvae_optimizer.step()
+
+                    # For reloaded model training.
+                    accum_iterno = self.accum_iterno + total_iterno
+                    accum_epochs = self.accum_epochs + epoch
                     # Schedule learning rate.
-                    if total_iterno in [4e5, 6e5, 8e5]:
+                    if accum_iterno in [4e5, 6e5, 8e5]:
                         self._halve_lr(self.vqvae_optimizer)
 
                     # Save losses
@@ -175,35 +186,39 @@ class Trainer(object):
                     '''
                     train_data_loader.set_description(
                         (
-                            f'epochs: {epoch}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
+                            f'epochs: {accum_iterno}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
                         )
                     )
-
                     # Print info.
-                    if total_iterno > 1 and total_iterno % self.hps.print_info_every == 0:
+                    if total_iterno > 0 and total_iterno % self.hps.print_info_every == 0:
                         
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()][-2:]) + \
+                        slot_value = (accum_epochs, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), accum_iterno) + tuple([value for value in info.values()][-2:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = '\nVQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
-                        print(log % slot_value)
+                        log = 'VQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
+                        #print(log % slot_value)
+                        train_data_loader.write(log % slot_value)
                         # Clear costs.
                         costs = []
                         start = time.time()
                     
                     # Save the checkpoint.
-                    if total_iterno > 1 and total_iterno % self.hps.save_model_every == 0:
+                    if total_iterno > 0 and total_iterno % self.hps.save_model_every == 0:
                         #loss_rec_best = min(loss_rec, loss_rec_best)
                         # Save best models
                         if total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best:
                             loss_rec_best = mean_loss_rec
                             is_best_loss = True
-                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                            self.save_model(model_path, self.mode, accum_epochs, iterno, accum_iterno, is_best_loss)
+                            #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                            train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                         else:
                             is_best_loss = False
-                            self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                            print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
-        
+                            self.save_model(model_path, self.mode, accum_epochs, iterno, accum_iterno, is_best_loss)
+                            #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                            train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                    #train_data_loader.update()
+                    train_data_loader.write("-" * 100)
+
         elif self.mode == "melgan":
             loss_rec_best = 10000
             costs = []
@@ -329,4 +344,8 @@ if __name__ == "__main__":
     #test_data_loader = DataLoader(test_set, batch_size=1)
     trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae", add_speaker_id=True, num_speaker=num_speaker)
     model_path = os.path.join("ckpts", "model")
+    
+    load_model = False
+    if load_model:
+        trainer.load_model('ckpts/model-vqvae-3-0-4-True.pt', 'vqvae')
     trainer.train(save_model_path=model_path)

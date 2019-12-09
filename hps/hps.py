@@ -105,9 +105,9 @@ class HyperParams(object):
 
                 'max_saved_model':5, # Max number of saved models.
                 'max_best_model':3, # Max number of saved best-loss models.
-                'print_info_every':149,#300, # Print training info every {} iterations.
+                'print_info_every':300, # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':149, # Save model during training every {} iterations.
+                'save_model_every':300, # Save model during training every {} iterations.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
