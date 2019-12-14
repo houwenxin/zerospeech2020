@@ -88,25 +88,26 @@ if __name__ == "__main__":
     model = torch.load("model-vqvae-14058-0-2094493-True.pt", map_location='cpu')
     vqvae.load_state_dict(model['vqvae'])
     wav_path = "./recon_wavs/"
-    for idx, (x, speaker_id) in enumerate(train_data_loader):
-        vqvae.eval()
-        #print(idx)
-        x_mel = audio2mel(x)
-        x_rec, _ = vqvae(x_mel, speaker_id)
-        x_mel = np.array(x_mel).squeeze(0)
-        x_rec = np.array(x_rec.detach()).squeeze(0)
-        #print(x_mel.shape)
-        wav = mel2audio(x_mel)
-        vqvae_wav = mel2audio(x_rec)
-        print(x.squeeze())
-        print(wav)
-        print(vqvae_wav)
-        print('------------------------------------------------------' * 2)
-        speaker_id = int(speaker_id)
-        sf.write(wav_path + 'org_' + str(idx) + '_' + str(speaker_id) + '.wav', x.squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-        sf.write(wav_path + 'rec_' + str(idx) + '_' + str(speaker_id) + '.wav', wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-        sf.write(wav_path + 'vqvae_' + str(idx) + '_' + str(speaker_id) + '.wav', vqvae_wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-        if idx == 10:
-            break
-	    #sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
+    with torch.no_grad():
+        for idx, (x, speaker_id) in enumerate(train_data_loader):
+            vqvae.eval()
+            #print(idx)
+            x_mel = audio2mel(x)
+            x_rec, _ = vqvae(x_mel, speaker_id)
+            x_mel = np.array(x_mel).squeeze(0)
+            x_rec = np.array(x_rec).squeeze(0)
+            #print(x_mel.shape)
+            wav = mel2audio(x_mel)
+            vqvae_wav = mel2audio(x_rec)
+            print(x.squeeze())
+            print(wav)
+            print(vqvae_wav)
+            print('------------------------------------------------------' * 2)
+            speaker_id = int(speaker_id)
+            sf.write(wav_path + 'org_' + str(idx) + '_' + str(speaker_id) + '.wav', x.squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+            sf.write(wav_path + 'rec_' + str(idx) + '_' + str(speaker_id) + '.wav', wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+            sf.write(wav_path + 'vqvae_' + str(idx) + '_' + str(speaker_id) + '.wav', vqvae_wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+            if idx == 10:
+                break
+            #sf.write(wav_path2, wav_data_mel, hp.sr, 'PCM_16')
         
