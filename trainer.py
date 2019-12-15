@@ -25,7 +25,7 @@ from model.melgan.melgan import Generator, Discriminator
 torch.manual_seed(1)
 
 class Trainer(object):
-    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae", add_speaker_id=False, num_speaker=-1):
+    def __init__(self, hps, train_data_loader, logger_path="ckpts/logs/", mode="vqvae", num_speaker=-1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using cuda: ", torch.cuda.is_available())
 
@@ -33,18 +33,20 @@ class Trainer(object):
         #self.train_data_loader = train_data_loader # Mel Input Shape: (B, T, 80)
         self.train_data_loader = train_data_loader # Use tqdm progress bar
         self.mode = mode
-
-        self.add_speaker_id = add_speaker_id
-        if self.add_speaker_id: 
-            assert num_speaker != -1, "num_speaker should be given."
-            self.num_speaker = num_speaker
         
-        self.lr = self.hps.lr # Initial learning rate
+        self.num_speaker = num_speaker
+        if mode == "vqvae":
+            self.lr = self.hps.lr_vqvae # Initial learning rate
+        elif mode == "melgan":
+            self.lr = self.hps.lr_melgan
+
         self.saved_model_list = []
         self.best_model_list = []
         self.max_saved_model = hps.max_saved_model # Max number of saved model.
         self.max_best_model = hps.max_best_model # Max number of model with best losses.
-        #self.writer = SummaryWriter(logger_path)
+        
+        #self.writer = SummaryWriter(logger_path) # Tensoboard Writer
+        
         self.criterion = nn.MSELoss() # Use MSE Loss
         self.build_model()
 
@@ -53,24 +55,18 @@ class Trainer(object):
 
     def build_model(self):
         self.audio2mel = Audio2Mel().to(self.device)
-        if self.add_speaker_id:
-            self.vqvae = VQVAE(in_channel=80, channel=512, 
-                                embed_dim=self.hps.vqvae_embed_dim, 
-                                n_embed=self.hps.vqvae_n_embed,
-                                add_speaker_id=True, num_speaker=self.num_speaker,
-                                ).to(self.device)
-        else:
-            self.vqvae = VQVAE(in_channel=80, channel=512, 
-                                embed_dim=self.hps.vqvae_embed_dim, 
-                                n_embed=self.hps.vqvae_n_embed,
-                                ).to(self.device)
+        self.vqvae = VQVAE(in_channel=80, channel=512, 
+                            embed_dim=self.hps.vqvae_embed_dim, 
+                            n_embed=self.hps.vqvae_n_embed,
+                            num_speaker=self.num_speaker,
+                            ).to(self.device)
         if self.mode == "vqvae":
             self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.lr)
         elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
-            self.netG = Generator(self.hps.vqvae_n_embed, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
+            self.netG = Generator(2 * self.hps.vqvae_embed_dim, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
             self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor)
-            self.optG = torch.optim.Adam(self.netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
-            self.optD = torch.optim.Adam(self.netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+            self.optG = optim.Adam(self.netG.parameters(), lr=self.lr, betas=(0.5, 0.9))
+            self.optD = optim.Adam(self.netD.parameters(), lr=self.lr, betas=(0.5, 0.9))
         else:
             raise NotImplementedError("Invalid Mode!")
     
@@ -110,6 +106,12 @@ class Trainer(object):
         if name == "vqvae":
             self.vqvae.load_state_dict(model['vqvae'])
             self.vqvae_optimizer.load_state_dict(model['vqvae_optim'])
+        elif name == "vqvae/encoder_only":
+            model_dict=self.vqvae.state_dict()
+            # Filter out decoder's keys in state dict
+            load_dict = {k: v for k, v in model['vqvae'].items() if k in model_dict and "dec" not in k}
+            model_dict.update(load_dict)
+            self.vqvae.load_state_dict(model_dict)
         elif name == "mdelgan":
             self.netG.load_state_dict(model['generator'])
             self.netD.load_state_dict(model['discriminator'])
@@ -146,7 +148,7 @@ class Trainer(object):
                     total_iterno += 1
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
-                    if self.add_speaker_id:
+                    if self.num_speaker != -1:
                         speaker_id = speaker_id.to(self.device)
                         x_rec, loss_latent = self.vqvae(x_mel.to(self.device), speaker_id=speaker_id)
                     else:
@@ -222,25 +224,28 @@ class Trainer(object):
         elif self.mode == "melgan":
             loss_rec_best = 10000
             costs = []
+            start = time.time()
+
             self.vqvae.eval()
             for epoch in range(1, self.hps.melgan_epochs + 1):
-                for iterno, (x, speaker_id) in enumerate(self.train_data_loader):
+                train_data_loader = tqdm(self.train_data_loader, total=len(self.train_data_loader))
+                for iterno, (x, speaker_id) in enumerate(train_data_loader):
                     total_iterno += 1
-
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
-                    quant_t, quant_b, _, id_t, id_b = self.vqvae.encode(x_mel).detach()
+                    quant_t, quant_b, _, _, _ = self.vqvae.encode(x_mel)
+                    x_enc = self.vqvae.get_encoding(quant_t, quant_b).detach() # x_enc: (B, 2 * embed_dim, T/4)
                     x_pred = self.netG(x_enc.to(self.device))
 
                     with torch.no_grad():
-                        x_pred_enc = self.vqvae.encode(x_pred.detach())
-                        enc_error = F.l1_loss(x_enc, x_pred_enc).item()
+                        x_pred_mel = self.audio2mel(x_pred.detach())
+                        enc_error = F.l1_loss(x_mel, x_pred_mel).item()
                     
                     #######################
                     # Train Discriminator #
                     #######################
                     D_fake_det = self.netD(x_pred.to(self.device).detach())
-                    D_real = self.netD(x.cuda())
+                    D_real = self.netD(x.to(self.device))
 
                     loss_D = 0
                     for scale in D_fake_det:
@@ -256,7 +261,7 @@ class Trainer(object):
                     ###################
                     # Train Generator #
                     ###################
-                    D_fake = self.netD(x_pred.cuda())
+                    D_fake = self.netD(x_pred.to(self.device))
 
                     loss_G = 0
                     for scale in D_fake:
@@ -271,60 +276,73 @@ class Trainer(object):
                             loss_feat += wt * F.l1_loss(D_fake[i][j], D_real[i][j].detach())
 
                     self.netG.zero_grad()
-                    (loss_G + args.lambda_feat * loss_feat).backward()
+                    (loss_G + self.hps.lambda_feat * loss_feat).backward()
                     self.optG.step()
 
                     ######################
                     # Update tensorboard #
                     ######################
-                    costs.append([loss_D.item(), loss_G.item(), loss_feat.item(), enc_error])
+                    # For reloaded model training.
+                    accum_iterno = self.accum_iterno + total_iterno
+                    accum_epochs = self.accum_epochs + epoch
 
+                    costs.append([loss_D.item(), loss_G.item(), loss_feat.item(), enc_error])
+                    '''
                     self.writer.add_scalar("melgan_loss/discriminator", costs[-1][0], total_iterno)
                     self.writer.add_scalar("melgan_loss/generator", costs[-1][1], total_iterno)
                     self.writer.add_scalar("melgan_loss/feature_matching", costs[-1][2], total_iterno)
                     self.writer.add_scalar("melgan_loss/enc_reconstruction", costs[-1][3], total_iterno)
+                    '''
 
-
-                     # Print info.
-                    if total_iterno % self.hps.print_info_every == 0:
-                        info = {f'{self.mode}/loss_rec': loss_rec.item(),
-                                 '{self.mode}/loss_rec_mean': np.asarray(costs).mean(0),
-                                }
-                        slot_value = (epoch, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), total_iterno) + tuple([value for value in info.values()]) + \
+                    mean_loss_rec = np.array(costs).mean(0)[-1]
+                    mean_D_loss = np.array(costs).mean(0)[0]
+                    mean_G_loss = np.array(costs).mean(0)[1]
+                    info = {
+                        f'{self.mode}/D_loss': costs[-1][0],
+                        f'{self.mode}/G_loss': costs[-1][1],
+                        f'{self.mode}/feature_matching_loss': costs[-1][2],
+                        f'{self.mode}/loss_rec': costs[-1][3],
+                        f'{self.mode}/mean_D_loss': mean_D_loss,
+                        f'{self.mode}/mean_G_loss': mean_G_loss,
+                        f'{self.mode}/mean_loss_rec': mean_loss_rec,
+                    }
+                    '''
+                    for tag, value in info.items():
+                        self.writer.add_scalar(tag, value, total_iterno)
+                    '''
+                    train_data_loader.set_description(
+                        (
+                            f'epochs: {accum_iterno}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
+                        )
+                    )
+                    # Print info.
+                    if total_iterno > 0 and total_iterno % self.hps.print_info_every == 0:
+                        
+                        slot_value = (accum_epochs, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), accum_iterno) + tuple([value for value in info.values()][-3:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'MelGAN | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Loss: %.3f | Mean Loss: %.3f | Ms/Batch: %5.2f'
-                        print(log % slot_value)
+                        log = 'VQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean D Loss: %.3f | Mean G Loss: %.3f | Mean Rec Loss: %.3f | Ms/Batch: %5.2f'
+                        #print(log % slot_value)
+                        train_data_loader.write(log % slot_value)
                         # Clear costs.
                         costs = []
                         start = time.time()
-                    
+
                     # Save the checkpoint.
-                    if (total_iterno > 1 and total_iterno % self.hps.save_model_every == 0) or (total_iterno > self.hps.start_save_best_model and loss_rec < loss_rec_best):
-                        if loss_rec < loss_rec_best:
+                    if total_iterno > 0 and total_iterno % self.hps.save_model_every == 0:
+                        # Save best models
+                        if total_iterno > self.hps.start_save_best_model and mean_loss_rec < loss_rec_best:
+                            loss_rec_best = mean_loss_rec
                             is_best_loss = True
-                            loss_rec_best = loss_rec
+                            self.save_model(model_path, self.mode, accum_epochs, iterno, accum_iterno, is_best_loss)
+                            #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                            train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                         else:
                             is_best_loss = False
-                            
-                        self.save_model(model_path, self.mode, epoch, iterno, total_iterno, is_best_loss)
-                        print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{total_iterno}, loss:{loss_rec}, is_best_loss:{is_best_loss}")
-                        '''
-                        st = time.time()
-                        with torch.no_grad():
-                            for i, (voc, _) in enumerate(zip(test_voc, test_audio)):
-                                pred_audio = self.netG(voc)
-                                pred_audio = pred_audio.squeeze().cpu()
-                                save_sample(root / ("generated_%d.wav" % i), 22050, pred_audio)
-                                self.writer.add_audio(
-                                    "generated/sample_%d.wav" % i,
-                                    pred_audio,
-                                    epoch,
-                                    sample_rate=22050,
-                                )
-
-                        print("Took %5.4fs to generate samples" % (time.time() - st))
-                        '''
-                        print("-" * 100)
+                            self.save_model(model_path, self.mode, accum_epochs, iterno, accum_iterno, is_best_loss)
+                            #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                            train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
+                    #train_data_loader.update()
+                    train_data_loader.write("-" * 100)
 
 
 if __name__ == "__main__":
@@ -337,15 +355,29 @@ if __name__ == "__main__":
     hps = Hps.get_tuple()
     #data_path = "../../databases/english/" # On lab server.
     data_path = "./databases/english_small/" # On my own PC.
-    rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
-    num_speaker = rec_train_dataset.get_speaker_num()
-    #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
-    train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
-    #test_data_loader = DataLoader(test_set, batch_size=1)
-    trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode="vqvae", add_speaker_id=True, num_speaker=num_speaker)
+    mode = "melgan"
+    
+    load_vqvae = False
+    if mode == "vqvae":
+        rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
+        num_speaker = rec_train_dataset.get_speaker_num()
+        #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
+        train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
+        #test_data_loader = DataLoader(test_set, batch_size=1)
+        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=num_speaker)
+    
+    elif mode == "melgan":
+        load_vqvae = True
+        gan_train_dataset = AudioDataset(audio_files=Path(data_path) / "gan_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
+        num_speaker = gan_train_dataset.get_speaker_num()
+        #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
+        train_data_loader = DataLoader(gan_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
+        #test_data_loader = DataLoader(test_set, batch_size=1)
+        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=-1)
+    
     model_path = os.path.join("ckpts", "model")
     
-    load_model = False
-    if load_model:
-        trainer.load_model('ckpts/model-vqvae-3-0-4-True.pt', 'vqvae')
+    if load_vqvae:
+        name = 'vqvae' if mode == "vqvae" else 'vqvae/encoder_only'
+        trainer.load_model('ckpts/model-vqvae-3-0-4-True.pt', name)
     trainer.train(save_model_path=model_path)

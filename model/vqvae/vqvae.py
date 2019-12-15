@@ -81,7 +81,6 @@ class VQVAE(nn.Module):
         embed_dim=64,
         n_embed=512,
         decay=0.99,
-        add_speaker_id=False,
         num_speaker=-1,
     ):
         super(VQVAE, self).__init__()
@@ -99,16 +98,17 @@ class VQVAE(nn.Module):
         self.upsample_t = nn.ConvTranspose1d(
             embed_dim, embed_dim, 4, stride=2, padding=1
         )
-        self.add_speaker_id=add_speaker_id
-        if self.add_speaker_id:
-            self.spk_embed = nn.Embedding(num_speaker, embed_dim // 2)
+
+        self.num_speaker = num_speaker
+        if self.num_speaker != -1:
+            self.spk_embed = nn.Embedding(self.num_speaker, embed_dim // 2)
             self.dec = Decoder(in_channel=embed_dim + embed_dim + embed_dim // 2, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
         else:
             self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
 
     def forward(self, input, speaker_id=-1):
         quant_t, quant_b, diff, _, _ = self.encode(input)
-        if self.add_speaker_id:
+        if self.num_speaker != -1:
             assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
             dec = self.decode(quant_t, quant_b, speaker_id)
         else:
@@ -139,7 +139,7 @@ class VQVAE(nn.Module):
     def decode(self, quant_t, quant_b, speaker_id=-1):
         upsample_t = self.upsample_t(quant_t) # Return: (B, embed_dim, T/4)
         quant = torch.cat([upsample_t, quant_b], 1) # Return: (B, 2 * embed_dim, T/4)
-        if self.add_speaker_id:
+        if self.num_speaker != -1:
             assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
             spk = self.spk_embed(speaker_id)
             spk = spk.view(spk.size(0), spk.size(1), 1)  # Return: (B, embed_dim // 2, 1)

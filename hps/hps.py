@@ -59,7 +59,8 @@ hp = ProcessingHyperParams()
 class HyperParams(object):
 	def __init__(self, path=None):
 		self.hps = namedtuple('hps', [
-            'lr', # Learning rate
+            'lr_vqvae', # Learning rates
+            'lr_melgan',
             'batch_size', # Batch size of training data.
             'max_grad_norm', # 5
             
@@ -84,6 +85,7 @@ class HyperParams(object):
             # ============== MelGAN Generator =============
             'ngf',
             'n_residual_layers',
+            'lambda_feat',
 
             # ============== MelGAN Discriminator =============
             'num_D', # Number of discriminators
@@ -98,8 +100,9 @@ class HyperParams(object):
 		else:
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
 			default = {
-                'lr':4e-4,
-                'batch_size':64, # Batch size of training data.
+                'lr_vqvae':4e-4,
+                'lr_melgan':1e-4,
+                'batch_size':1, # For testing #64, # Batch size of training data.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
@@ -107,7 +110,7 @@ class HyperParams(object):
                 'max_best_model':3, # Max number of saved best-loss models.
                 'print_info_every':300, # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':300, # Save model during training every {} iterations.
+                'save_model_every':2, # Save model during training every {} iterations.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
@@ -122,6 +125,7 @@ class HyperParams(object):
                 # ============== MelGAN Generator =============
                 'ngf':32,
                 'n_residual_layers':3,
+                'lambda_feat':10,
 
                 # ============== MelGAN Discriminator =============
                 'num_D':3, # Number of discriminators

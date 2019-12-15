@@ -8,7 +8,8 @@ class Generator(nn.Module):
         # In original paper, input_size == n_mel_channels
         # ngf is a model hyperparameter, meaning the final number of feature maps in Generator, 32 in paper.
         super().__init__()
-        ratios = [8, 8, 2, 2] # 4 stages of upsampling: 8x, 8x, 2x, 2x --> 256x (hop_length when calculating Mel Spectrogram)
+        #ratios = [8, 8, 2, 2] # 4 stages of upsampling: 8x, 8x, 2x, 2x --> 256x (hop_length when calculating Mel Spectrogram)
+        ratios = [8, 8, 4, 2, 2] # Note(houwx): Modify to 8x, 8x, 4x, 2x, 2x here
         self.hop_length = np.prod(ratios)
         mult = int(2 ** len(ratios)) # 16
 
