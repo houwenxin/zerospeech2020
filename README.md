@@ -3,8 +3,9 @@
 Requirements: pytorch, librosa, pysoundfile, tqdm
   
 ### Progress:
-1. Pure VQVAE-2 Done. (Plan: only use bottom encoding.)
-2. TODO: Try Speaker Adversarial Training & Add speaker info to VQVAE decoder. (Which is better?)
+1. Pure VQVAE-2 (DONE).
+2. Try Speaker Adversarial Training (TODO) & Add speaker info to VQVAE decoder (DONE). (Which is better?)
+3. Core idea: Self-Cycle GAN (TODO).
 
 ### Related Repositories:
 1. vq-vae-2-pytorch: https://github.com/rosinality/vq-vae-2-pytorch  
