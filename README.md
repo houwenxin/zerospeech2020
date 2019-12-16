@@ -21,4 +21,5 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 + Unsupervised speech representation learning using WaveNet autoencoders. https://arxiv.org/pdf/1901.08810.pdf  
 + [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING. https://tsuchhiii.github.io/pdf/paper/18_icassp_tsuchiya.pdf  
 + [Possible] SPEAKER-INVARIANT TRAINING VIA ADVERSARIAL LEARNING. https://www.microsoft.com/en-us/research/uploads/prod/2018/04/ICASSP2018_Speaker_Invariant_Training.pdf  
-+ [Possible] Multi-target Voice Conversion without Parallel Data by Adversarially LearningDisentangled Audio Representations. https://arxiv.org/pdf/1804.02812.pdf  
++ [Possible] Multi-target Voice Conversion without Parallel Data by Adversarially Learning Disentangled Audio Representations. https://arxiv.org/pdf/1804.02812.pdf  
++ [Possible] Unpaired Image-to-Image Translationusing Cycle-Consistent Adversarial Networks. https://arxiv.org/pdf/1703.10593.pdf  
