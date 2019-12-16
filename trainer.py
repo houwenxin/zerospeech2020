@@ -63,7 +63,11 @@ class Trainer(object):
         if self.mode == "vqvae":
             self.vqvae_optimizer = optim.Adam(self.vqvae.parameters(), lr=self.lr)
         elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
-            self.netG = Generator(2 * self.hps.vqvae_embed_dim, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
+            input_dim = 2 * self.hps.vqvae_embed_dim
+            if self.num_speaker != -1:
+                self.spk_embed = nn.Embedding(self.num_speaker, self.hps.vqvae_embed_dim // 2)
+                input_dim += self.hps.vqvae_embed_dim // 2
+            self.netG = Generator(input_dim, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
             self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor)
             self.optG = optim.Adam(self.netG.parameters(), lr=self.lr, betas=(0.5, 0.9))
             self.optD = optim.Adam(self.netD.parameters(), lr=self.lr, betas=(0.5, 0.9))
@@ -78,10 +82,12 @@ class Trainer(object):
         elif name == "melgan":
             model = {
 				'generator': self.netG.state_dict(),
-                'distriminator': self.netD.state_dict(),
+                'discriminator': self.netD.state_dict(),
                 'generator_optim': self.optG.state_dict(),
                 'discriminator_optim': self.optD.state_dict()
 			}
+            if self.num_speaker != -1:
+                model['spk_embed'] = self.spk_embed.state_dict()
         else:
             raise NotImplementedError("Invalid Model Name!")
         
@@ -109,20 +115,23 @@ class Trainer(object):
         elif name == "vqvae/encoder_only":
             model_dict=self.vqvae.state_dict()
             # Filter out decoder's keys in state dict
-            load_dict = {k: v for k, v in model['vqvae'].items() if k in model_dict and "dec" not in k}
+            load_dict = {k: v for k, v in model['vqvae'].items() if k in model_dict and "dec" not in k and "spk" not in k}
             model_dict.update(load_dict)
             self.vqvae.load_state_dict(model_dict)
-        elif name == "mdelgan":
+        elif name == "melgan":
             self.netG.load_state_dict(model['generator'])
             self.netD.load_state_dict(model['discriminator'])
             self.optG.load_state_dict(model['generator_optim'])
             self.optD.load_state_dict(model['discriminator_optim'])
+            if self.num_speaker != -1:
+                self.spk_embed.load_state_dict(model['spk_embed'])
         else:
             raise NotImplementedError("Invalid Model Name!")
         
-        import os
-        self.accum_epochs = int(os.path.basename(model_file).split('-')[2]) - 1
-        self.accum_iterno = int(os.path.basename(model_file).split('-')[4])
+        if self.mode in name:
+            import os
+            self.accum_epochs = int(os.path.basename(model_file).split('-')[2]) - 1
+            self.accum_iterno = int(os.path.basename(model_file).split('-')[4])
         print(f"{name} loaded.")
 
 
@@ -235,6 +244,14 @@ class Trainer(object):
                     x_mel = self.audio2mel(x).detach()
                     quant_t, quant_b, _, _, _ = self.vqvae.encode(x_mel)
                     x_enc = self.vqvae.get_encoding(quant_t, quant_b).detach() # x_enc: (B, 2 * embed_dim, T/4)
+
+                    if self.num_speaker != -1:
+                        speaker_id = speaker_id.to(self.device)
+                        spk = self.spk_embed(speaker_id)
+                        spk = spk.view(spk.size(0), spk.size(1), 1)  # Return: (B, embed_dim // 2, 1)
+                        spk_expand = spk.expand(spk.size(0), spk.size(1), x_enc.size(2)) # Return: (B, embed_dim // 2, T / 4)
+                        #print("\n", spk_expand.shape)
+                        x_enc = torch.cat((x_enc, spk_expand), dim=1) 
                     x_pred = self.netG(x_enc.to(self.device))
 
                     with torch.no_grad():
@@ -312,7 +329,7 @@ class Trainer(object):
                     '''
                     train_data_loader.set_description(
                         (
-                            f'epochs: {accum_iterno}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
+                            f'epochs: {accum_iterno}; D_loss: {costs[-1][0]}; G_loss: {costs[-1][1]}; loss_rec: {costs[-1][3]}; mean_loss_rec: {mean_loss_rec}'
                         )
                     )
                     # Print info.
@@ -320,7 +337,7 @@ class Trainer(object):
                         
                         slot_value = (accum_epochs, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), accum_iterno) + tuple([value for value in info.values()][-3:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'VQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean D Loss: %.3f | Mean G Loss: %.3f | Mean Rec Loss: %.3f | Ms/Batch: %5.2f'
+                        log = 'MelGAN Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean D Loss: %.3f | Mean G Loss: %.3f | Mean Rec Loss: %.3f | Ms/Batch: %5.2f'
                         #print(log % slot_value)
                         train_data_loader.write(log % slot_value)
                         # Clear costs.
@@ -358,6 +375,7 @@ if __name__ == "__main__":
     mode = "melgan"
     
     load_vqvae = False
+    load_melgan = True
     if mode == "vqvae":
         rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
         num_speaker = rec_train_dataset.get_speaker_num()
@@ -373,11 +391,14 @@ if __name__ == "__main__":
         #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
         train_data_loader = DataLoader(gan_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
         #test_data_loader = DataLoader(test_set, batch_size=1)
-        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=-1)
+        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=num_speaker)
     
     model_path = os.path.join("ckpts", "model")
     
     if load_vqvae:
         name = 'vqvae' if mode == "vqvae" else 'vqvae/encoder_only'
-        trainer.load_model('ckpts/model-vqvae-3-0-4-True.pt', name)
+        trainer.load_model('ckpts/model-vqvae-1-10-10-True.pt', name)
+    if load_melgan:
+        name = 'melgan'
+        trainer.load_model('ckpts/model-melgan-1-2-2-True.pt', name)
     trainer.train(save_model_path=model_path)
