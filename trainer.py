@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-17 19:35:09
+@LastEditTime: 2019-12-17 19:40:08
 @Description: 
 '''
 import time
@@ -228,7 +228,7 @@ class Trainer(object):
                             #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                             train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                     #train_data_loader.update()
-            train_data_loader.write("-" * 100)
+                train_data_loader.write("-" * 200)
 
         elif self.mode == "melgan":
             loss_rec_best = 10000
@@ -359,7 +359,7 @@ class Trainer(object):
                             #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                             train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                     #train_data_loader.update()
-                train_data_loader.write("-" * 100)
+                train_data_loader.write("-" * 200)
 
 
 if __name__ == "__main__":
