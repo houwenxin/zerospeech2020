@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors: houwx
-@LastEditTime: 2019-12-08 16:59:17
+@LastEditTime: 2019-12-17 19:31:07
 @Description: Hyper-Parameters
 '''
 
@@ -102,19 +102,19 @@ class HyperParams(object):
 			default = {
                 'lr_vqvae':4e-4,
                 'lr_melgan':1e-4,
-                'batch_size':1, # For testing #64, # Batch size of training data.
+                'batch_size':64, # Batch size of training data.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
                 'max_saved_model':5, # Max number of saved models.
                 'max_best_model':3, # Max number of saved best-loss models.
-                'print_info_every':300, # Print training info every {} iterations.
+                'print_info_every':149,# 149 for VQVAE. # Print training info every {} iterations.
                 'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':2, # Save model during training every {} iterations.
+                'save_model_every':149, # Save model during training every {} iterations.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
-                'vqvae_epochs':3000,
+                'vqvae_epochs':6000,
                 'vqvae_n_embed':256, #512, # Try 256, 128
                 'vqvae_embed_dim':64,
                 'loss_latent_weight':0.25, # Weight of commitment loss: 0.25 in paper VQVAE-2
