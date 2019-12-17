@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 20:50:56
 @LastEditors: houwx
-@LastEditTime: 2019-12-08 16:54:48
+@LastEditTime: 2019-12-17 19:35:09
 @Description: 
 '''
 import time
@@ -65,10 +65,10 @@ class Trainer(object):
         elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
             input_dim = 2 * self.hps.vqvae_embed_dim
             if self.num_speaker != -1:
-                self.spk_embed = nn.Embedding(self.num_speaker, self.hps.vqvae_embed_dim // 2)
+                self.spk_embed = nn.Embedding(self.num_speaker, self.hps.vqvae_embed_dim // 2).to(self.device)
                 input_dim += self.hps.vqvae_embed_dim // 2
             self.netG = Generator(input_dim, self.hps.ngf, self.hps.n_residual_layers).to(self.device)
-            self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor)
+            self.netD = Discriminator(self.hps.num_D, self.hps.ndf, self.hps.n_layers_D, self.hps.downsamp_factor).to(self.device)
             self.optG = optim.Adam(self.netG.parameters(), lr=self.lr, betas=(0.5, 0.9))
             self.optD = optim.Adam(self.netD.parameters(), lr=self.lr, betas=(0.5, 0.9))
         else:
@@ -197,7 +197,7 @@ class Trainer(object):
                     '''
                     train_data_loader.set_description(
                         (
-                            f'epochs: {accum_iterno}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
+                            f'total_epoch: {accum_epochs}; total_iterno: {accum_iterno}; loss_rec: {costs[-1][0]}; loss_latent: {costs[-1][1]}; mean_loss_rec: {mean_loss_rec}'
                         )
                     )
                     # Print info.
@@ -228,7 +228,7 @@ class Trainer(object):
                             #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                             train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                     #train_data_loader.update()
-                    train_data_loader.write("-" * 100)
+            train_data_loader.write("-" * 100)
 
         elif self.mode == "melgan":
             loss_rec_best = 10000
@@ -329,7 +329,7 @@ class Trainer(object):
                     '''
                     train_data_loader.set_description(
                         (
-                            f'epochs: {accum_iterno}; D_loss: {costs[-1][0]}; G_loss: {costs[-1][1]}; loss_rec: {costs[-1][3]}; mean_loss_rec: {mean_loss_rec}'
+                            f'total_epoch: {accum_epochs}; total_iterno: {accum_iterno}; D_loss: {costs[-1][0]}; G_loss: {costs[-1][1]}; loss_rec: {costs[-1][3]}; mean_loss_rec: {mean_loss_rec}'
                         )
                     )
                     # Print info.
@@ -359,7 +359,7 @@ class Trainer(object):
                             #print(f"Model saved: {self.mode}, epoch: {epoch}, iterno: {iterno}, total_iterno:{self.total_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                             train_data_loader.write(f"Model saved: {self.mode}, epoch: {accum_epochs}, iterno: {iterno}, total_iterno:{accum_iterno}, loss:{mean_loss_rec}, is_best_loss:{is_best_loss}")
                     #train_data_loader.update()
-                    train_data_loader.write("-" * 100)
+                train_data_loader.write("-" * 100)
 
 
 if __name__ == "__main__":
@@ -370,12 +370,12 @@ if __name__ == "__main__":
     from hps.hps import HyperParams
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    #data_path = "../../databases/english/" # On lab server.
-    data_path = "./databases/english_small/" # On my own PC.
-    mode = "melgan"
+    data_path = "../../databases/english/" # On lab server.
+    #data_path = "./databases/english_small/" # On my own PC.
+    mode = "vqvae"
     
     load_vqvae = False
-    load_melgan = True
+    load_melgan = False
     if mode == "vqvae":
         rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
         num_speaker = rec_train_dataset.get_speaker_num()
@@ -397,7 +397,7 @@ if __name__ == "__main__":
     
     if load_vqvae:
         name = 'vqvae' if mode == "vqvae" else 'vqvae/encoder_only'
-        trainer.load_model('ckpts/model-vqvae-1-10-10-True.pt', name)
+        trainer.load_model('ckpts/vqvae_model.pt', name)
     if load_melgan:
         name = 'melgan'
         trainer.load_model('ckpts/model-melgan-1-2-2-True.pt', name)
