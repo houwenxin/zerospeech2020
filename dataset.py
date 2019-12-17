@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 19:01:12
 @LastEditors: houwx
-@LastEditTime: 2019-12-03 19:53:40
+@LastEditTime: 2019-12-17 19:29:14
 @Description: 
 '''
 
@@ -36,8 +36,9 @@ class AudioDataset(torch.utils.data.Dataset):
         self.audio_files = files_to_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x for x in self.audio_files]
         
-        speakers = [Path(x).stem for x in self.audio_files]
+        speakers = set([Path(x).stem.split("_")[0] for x in self.audio_files])
         self.speaker2id = self.build_speaker2id(speakers)
+        print("Speakers: ", self.speaker2id.keys())
         del speakers
         
         random.seed(1234)
@@ -58,7 +59,7 @@ class AudioDataset(torch.utils.data.Dataset):
                 audio, (0, self.segment_length - audio.size(0)), "constant"
             ).data
         # Get speaker id
-        speaker_id = self.speaker2id[Path(filename).stem]
+        speaker_id = self.speaker2id[Path(filename).stem.split("_")[0]]
         # audio = audio / 32768.0
         return audio.unsqueeze(0), speaker_id
 
