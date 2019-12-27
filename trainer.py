@@ -152,13 +152,13 @@ class Trainer(object):
             start = time.time()
             for epoch in range(1, self.hps.vqvae_epochs + 1):
                 train_data_loader = tqdm(self.train_data_loader, total=len(self.train_data_loader))
-                for iterno, (x, speaker_id) in enumerate(train_data_loader):
+                for iterno, (x, speaker_info) in enumerate(train_data_loader):
                     self.vqvae.train() # Set to train mode.
                     total_iterno += 1
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
                     if self.num_speaker != -1:
-                        speaker_id = speaker_id.to(self.device)
+                        speaker_id = speaker_info['source_speaker']['id'].to(self.device)
                         x_rec, loss_latent = self.vqvae(x_mel.to(self.device), speaker_id=speaker_id)
                     else:
                         x_rec, loss_latent = self.vqvae(x_mel.to(self.device))
@@ -238,7 +238,7 @@ class Trainer(object):
             self.vqvae.eval()
             for epoch in range(1, self.hps.melgan_epochs + 1):
                 train_data_loader = tqdm(self.train_data_loader, total=len(self.train_data_loader))
-                for iterno, (x, speaker_id) in enumerate(train_data_loader):
+                for iterno, (x, speaker_info) in enumerate(train_data_loader):
                     total_iterno += 1
                     x = x.to(self.device)
                     x_mel = self.audio2mel(x).detach()
@@ -246,7 +246,7 @@ class Trainer(object):
                     x_enc = self.vqvae.get_encoding(quant_t, quant_b).detach() # x_enc: (B, 2 * embed_dim, T/4)
 
                     if self.num_speaker != -1:
-                        speaker_id = speaker_id.to(self.device)
+                        speaker_id = speaker_info['source_speaker']['id'].to(self.device)
                         spk = self.spk_embed(speaker_id)
                         spk = spk.view(spk.size(0), spk.size(1), 1)  # Return: (B, embed_dim // 2, 1)
                         spk_expand = spk.expand(spk.size(0), spk.size(1), x_enc.size(2)) # Return: (B, embed_dim // 2, T / 4)
@@ -370,14 +370,14 @@ if __name__ == "__main__":
     from hps.hps import HyperParams
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    data_path = "../../databases/english/" # On lab server.
-    #data_path = "./databases/english_small/" # On my own PC.
-    mode = "vqvae"
+    #data_path = "../../databases/english/" # On lab server.
+    data_path = "./databases/english_small/" # On my own PC.
+    mode = "melgan"
     
     load_vqvae = False
     load_melgan = False
     if mode == "vqvae":
-        rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
+        rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000, mode='reconst')
         num_speaker = rec_train_dataset.get_speaker_num()
         #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
         train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
@@ -386,7 +386,7 @@ if __name__ == "__main__":
     
     elif mode == "melgan":
         load_vqvae = True
-        gan_train_dataset = AudioDataset(audio_files=Path(data_path) / "gan_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000)
+        gan_train_dataset = AudioDataset(audio_files=Path(data_path) / "gan_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000, mode='reconst')
         num_speaker = gan_train_dataset.get_speaker_num()
         #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
         train_data_loader = DataLoader(gan_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
@@ -399,6 +399,6 @@ if __name__ == "__main__":
         name = 'vqvae' if mode == "vqvae" else 'vqvae/encoder_only'
         trainer.load_model('ckpts/vqvae_model.pt', name)
     if load_melgan:
-        name = 'melgan'
+        name = 'melgan' 
         trainer.load_model('ckpts/model-melgan-1-2-2-True.pt', name)
     trainer.train(save_model_path=model_path)

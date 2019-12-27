@@ -14,15 +14,22 @@ import numpy as np
 import random
 from pathlib import Path
 
-def files_to_list(filename):
+def get_file_list(filename):
     """
     Takes a text file of filenames and makes a list of filenames
     """
     with open(filename, encoding="utf-8") as f:
-        files = f.readlines()
-
-    files = [f.rstrip() for f in files]
+        lines = f.readlines()
+    if "synthesis" in filename.name:
+        files = [line.rstrip().split()[0] for line in lines]
+    else:
+        files = [line.rstrip() for line in lines]
     return files
+
+def get_target_list(filename):
+    with open(filename, encoding="utf-8") as f:
+        lines = f.readlines()
+    return [line.rstrip().split()[1] for line in lines]
 
 class AudioDataset(torch.utils.data.Dataset):
     """
@@ -30,17 +37,27 @@ class AudioDataset(torch.utils.data.Dataset):
     spectrogram, audio pair.
     """
 
-    def __init__(self, audio_files, segment_length, sampling_rate, augment=True):
+    def __init__(self, audio_files, segment_length, sampling_rate, augment=True, mode='reconst'):
         self.sampling_rate = sampling_rate
         self.segment_length = segment_length
-        self.audio_files = files_to_list(audio_files)
+        #self.file_type = Path(audio_files).stem
+        self.audio_files = get_file_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x for x in self.audio_files]
         
-        speakers = set([Path(x).stem.split("_")[0] for x in self.audio_files])
-        self.speaker2id = self.build_speaker2id(speakers)
-        print("Speakers: ", self.speaker2id.keys())
-        del speakers
-        
+        assert mode in ['reconst', 'convert'] # Reconstruction / Conversion
+        self.mode = mode
+        if self.mode == 'convert':
+            self.target_speakers = get_target_list(audio_files)
+            speakers = sorted(set(self.target_speakers))
+            self.speaker2id = self.build_speaker2id(speakers)
+            print("Target Speaker Dict: ", self.speaker2id)
+            del speakers
+        elif self.mode == 'reconst':
+            speakers = sorted(set([Path(x).stem.split("_")[0] for x in self.audio_files]))
+            #print(speakers)
+            self.speaker2id = self.build_speaker2id(speakers)
+            print("Speaker Dict: ", self.speaker2id)
+            del speakers
         random.seed(1234)
         random.shuffle(self.audio_files)
         self.augment = augment
@@ -58,10 +75,24 @@ class AudioDataset(torch.utils.data.Dataset):
             audio = F.pad(
                 audio, (0, self.segment_length - audio.size(0)), "constant"
             ).data
-        # Get speaker id
-        speaker_id = self.speaker2id[Path(filename).stem.split("_")[0]]
+        
+        speaker_info = {}
+        source_speaker_name = Path(filename).stem.split("_")[0]
+        #print(source_speaker_name)
+        if source_speaker_name in self.speaker2id.keys():
+            source_speaker = {"name": source_speaker_name, "id": self.speaker2id[source_speaker_name]}
+        else:
+            source_speaker = {"name": source_speaker_name, "id": -1}
+        
+        #print(source_speaker[0])
+        
+        speaker_info['source_speaker'] = source_speaker
+        if self.mode == 'convert':
+            target_speaker = {"name": self.target_speakers[index], "id": self.speaker2id[self.target_speakers[index]]}
+            speaker_info['target_speaker'] = target_speaker
+        #print(speaker_info)
         # audio = audio / 32768.0
-        return audio.unsqueeze(0), speaker_id
+        return audio.unsqueeze(0), speaker_info
 
     def __len__(self):
         return len(self.audio_files)
