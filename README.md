@@ -7,6 +7,9 @@ Requirements: pytorch, librosa, pysoundfile, tqdm
 2. Try Speaker Adversarial Training (TODO) & Add speaker info to VQVAE decoder (DONE). (Which is better?)
 3. Core idea: Self-Cycle GAN (TODO).
 
+### Developing Log:
+2019/12/27: Fix bugs on speaker ids, Sampling rate of Audio2Mel & Mel2Audio. Develop evaluator for generating converted files.  
+
 ### Related Repositories:
 1. vq-vae-2-pytorch: https://github.com/rosinality/vq-vae-2-pytorch  
 2. melgan-neurips: https://github.com/descriptinc/melgan-neurips  
