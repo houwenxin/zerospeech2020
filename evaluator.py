@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-20 13:39:02
-@LastEditors: houwx
-@LastEditTime: 2019-12-11 16:19:56
+@LastEditors  : houwx
+@LastEditTime : 2020-01-05 17:26:40
 @Description: 
 '''
 from dataset import AudioDataset
@@ -94,14 +94,14 @@ class Evaluator(object):
                 costs.append(loss_rec.item())
 
                 # Convert to audio
-                wav = self.mel2audio(x_mel.squeeze())
-                vqvae_wav = self.mel2audio(x_rec.squeeze())
+                wav = self.mel2audio(x_mel.squeeze().to('cpu'))
+                vqvae_wav = self.mel2audio(x_rec.squeeze().to('cpu'))
                 print(x.squeeze())
                 print(wav)
                 print(vqvae_wav)
                 print('------------------------------------------------------' * 2)
                 #speaker_id = int(speaker_id)
-                sf.write(save_path + 'org_' + str(idx) + '_' + str(speaker_name) + '.wav', x.squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+                sf.write(save_path + 'org_' + str(idx) + '_' + str(speaker_name) + '.wav', x.to('cpu').squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
                 sf.write(save_path + 'rec_' + str(idx) + '_' + str(speaker_name) + '.wav', wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
                 sf.write(save_path + 'vqvae_' + str(idx) + '_' + str(speaker_name) + '.wav', vqvae_wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
                 if idx == 10:
@@ -129,8 +129,8 @@ class Evaluator(object):
                 x_enc = torch.cat((x_enc, spk_expand), dim=1) 
                 wav = self.netG(x_enc.to(self.device))
 
-                sf.write(save_path + 'org_' + str(idx) + '_' + str(source_speaker_name) + '.wav', x.squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-                sf.write(save_path + 'melgan_' + str(idx) + '_' + str(target_speaker_name) + '.wav', wav.squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+                sf.write(save_path + 'org_' + str(idx) + '_' + str(source_speaker_name) + '.wav', x.to('cpu').squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
+                sf.write(save_path + 'melgan_' + str(idx) + '_' + str(target_speaker_name) + '.wav', wav.to('cpu').squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
     
     def evaluate(self, save_path):
         self.vqvae.eval()
@@ -144,14 +144,14 @@ class Evaluator(object):
 if __name__ == "__main__":
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    #data_path = "../../databases/english/" # On lab server.
-    data_path = "./databases/english_small/" # On my own PC.
+    data_path = "../../databases/english/" # On lab server.
+    #data_path = "./databases/english_small/" # On my own PC.
     
-    vqvae_model = "./ckpts/vqvae_model.pt"
-    melgan_model = "./ckpts/melgan_model.pt"
+    vqvae_model = "./ckpts/model-vqvae-5998-0-893553-True.pt"
+    melgan_model = "./ckpts/model-melgan-6760-0-378504-True.pt"
     wav_save_path = "./recon_wavs/"
     #hps.seg_len = 16000 * 10
-    eval_mode = "vqvae"
+    eval_mode = "melgan"
 
     if eval_mode == 'vqvae':
         data_mode = 'reconst'

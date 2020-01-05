@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-25 19:01:12
-@LastEditors: houwx
-@LastEditTime: 2019-12-17 19:29:14
+@LastEditors  : houwx
+@LastEditTime : 2020-01-05 17:13:40
 @Description: 
 '''
 
@@ -42,7 +42,7 @@ class AudioDataset(torch.utils.data.Dataset):
         self.segment_length = segment_length
         #self.file_type = Path(audio_files).stem
         self.audio_files = get_file_list(audio_files)
-        self.audio_files = [Path(audio_files).parent / x for x in self.audio_files]
+        self.audio_files = [Path(audio_files).parent / x if x.endswith(".wav") else Path(audio_files).parent / (x + ".wav") for x in self.audio_files]
         
         assert mode in ['reconst', 'convert'] # Reconstruction / Conversion
         self.mode = mode
