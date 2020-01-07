@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 19:01:12
 @LastEditors  : houwx
-@LastEditTime : 2020-01-05 17:13:40
+@LastEditTime : 2020-01-07 19:45:06
 @Description: 
 '''
 
@@ -37,13 +37,15 @@ class AudioDataset(torch.utils.data.Dataset):
     spectrogram, audio pair.
     """
 
-    def __init__(self, audio_files, segment_length, sampling_rate, augment=True, mode='reconst'):
+    def __init__(self, audio_files, segment_length, sampling_rate, augment=True, mode='reconst', load_speech_id=False):
         self.sampling_rate = sampling_rate
         self.segment_length = segment_length
         #self.file_type = Path(audio_files).stem
         self.audio_files = get_file_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x if x.endswith(".wav") else Path(audio_files).parent / (x + ".wav") for x in self.audio_files]
         
+        self.load_speech_id = load_speech_id # Load speech id for generating outputs.
+
         assert mode in ['reconst', 'convert'] # Reconstruction / Conversion
         self.mode = mode
         if self.mode == 'convert':
@@ -78,6 +80,9 @@ class AudioDataset(torch.utils.data.Dataset):
         
         speaker_info = {}
         source_speaker_name = Path(filename).stem.split("_")[0]
+        if self.load_speech_id:
+            speech_id = Path(filename).stem.split("_")[1]
+            speaker_info['speech_id'] = speech_id
         #print(source_speaker_name)
         if source_speaker_name in self.speaker2id.keys():
             source_speaker = {"name": source_speaker_name, "id": self.speaker2id[source_speaker_name]}
