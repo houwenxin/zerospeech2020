@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-25 20:50:56
-@LastEditors: houwx
-@LastEditTime: 2019-12-17 19:40:08
+@LastEditors  : houwx
+@LastEditTime : 2020-01-08 16:19:51
 @Description: 
 '''
 import time
@@ -125,6 +125,12 @@ class Trainer(object):
             self.optD.load_state_dict(model['discriminator_optim'])
             if self.num_speaker != -1:
                 self.spk_embed.load_state_dict(model['spk_embed'])
+        elif name == "vqvae/spk_embed_only": # For MelGAN
+            model_dict=self.vqvae.state_dict()
+            # Filter out decoder's keys in state dict
+            load_dict = {k: v for k, v in model['vqvae'].items() if k in model_dict and "spk" in k}
+            model_dict.update(load_dict)
+            self.spk_embed.load_state_dict(model_dict)
         else:
             raise NotImplementedError("Invalid Model Name!")
         
@@ -205,7 +211,7 @@ class Trainer(object):
                         
                         slot_value = (accum_epochs, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), accum_iterno) + tuple([value for value in info.values()][-2:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'VQVAE Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
+                        log = 'VQVAE Stats | Epochs: [%05d/%05d] | Iters: [%05d/%05d] | Total Iters: %d | Mean Rec Loss: %.3f | Mean Latent Loss: %.3f | Ms/Batch: %5.2f'
                         #print(log % slot_value)
                         train_data_loader.write(log % slot_value)
                         # Clear costs.
@@ -337,7 +343,7 @@ class Trainer(object):
                         
                         slot_value = (accum_epochs, self.hps.vqvae_epochs, iterno, len(self.train_data_loader), accum_iterno) + tuple([value for value in info.values()][-3:]) + \
                                                         tuple([1000 * (time.time() - start) / self.hps.print_info_every])
-                        log = 'MelGAN Stats | Epochs: [%04d/%04d] | Iters:[%06d/%06d] | Total Iters: %d | Mean D Loss: %.3f | Mean G Loss: %.3f | Mean Rec Loss: %.3f | Ms/Batch: %5.2f'
+                        log = 'MelGAN Stats | Epochs: [%05d/%05d] | Iters: [%05d/%05d] | Total Iters: %d | Mean D Loss: %.3f | Mean G Loss: %.3f | Mean Rec Loss: %.3f | Ms/Batch: %5.2f'
                         #print(log % slot_value)
                         train_data_loader.write(log % slot_value)
                         # Clear costs.
@@ -368,37 +374,48 @@ if __name__ == "__main__":
     import os
     from torch.utils.data import DataLoader
     from hps.hps import HyperParams
+    import argparse
+
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    #data_path = "../../databases/english/" # On lab server.
-    data_path = "./databases/english_small/" # On my own PC.
-    mode = "melgan"
+    data_path = "../../databases/english/" # On lab server.
+    #data_path = "./databases/english_small/" # On my own PC.
     
-    load_vqvae = False
-    load_melgan = False
-    if mode == "vqvae":
+    vqvae_model = 'ckpts/vqvae_model.pt'
+    melgan_model = 'ckpts/model-melgan-1-2-2-True.pt'
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", type=str)
+    parser.add_argument("--load_vqvae", action='store_true')
+    parser.add_argument("--load_melgan", action='store_true')
+    # mode = "melgan"
+    # load_vqvae = False
+    # load_melgan = False
+    args = parser.parse_args()
+    if args.mode == "vqvae":
         rec_train_dataset = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000, mode='reconst')
         num_speaker = rec_train_dataset.get_speaker_num()
         #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
         train_data_loader = DataLoader(rec_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
         #test_data_loader = DataLoader(test_set, batch_size=1)
-        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=num_speaker)
+        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=args.mode, num_speaker=num_speaker)
     
-    elif mode == "melgan":
-        load_vqvae = True
+    elif args.mode == "melgan":
+        args.load_vqvae = True
         gan_train_dataset = AudioDataset(audio_files=Path(data_path) / "gan_train_files.txt", segment_length=hps.seg_len, sampling_rate=16000, mode='reconst')
         num_speaker = gan_train_dataset.get_speaker_num()
         #test_set = AudioDataset(audio_files=Path(data_path) / "test_files.txt", segment_length=22050 * 4, sampling_rate=22050, augment=False)
         train_data_loader = DataLoader(gan_train_dataset, batch_size=hps.batch_size, shuffle=True, num_workers=4)#hps.batch_size, num_workers=4)
         #test_data_loader = DataLoader(test_set, batch_size=1)
-        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=mode, num_speaker=num_speaker)
+        trainer = Trainer(hps=hps, train_data_loader=train_data_loader, mode=args.mode, num_speaker=num_speaker)
+        trainer.load_model(vqvae_model, name="vqvae/spk_embed_only") # Load pre-trained spk embeddings
     
     model_path = os.path.join("ckpts", "model")
     
-    if load_vqvae:
-        name = 'vqvae' if mode == "vqvae" else 'vqvae/encoder_only'
-        trainer.load_model('ckpts/vqvae_model.pt', name)
-    if load_melgan:
+    if args.load_vqvae:
+        name = 'vqvae' if args.mode == "vqvae" else 'vqvae/encoder_only'
+        trainer.load_model(vqvae_model, name)
+    if args.load_melgan:
         name = 'melgan' 
-        trainer.load_model('ckpts/model-melgan-1-2-2-True.pt', name)
+        trainer.load_model(melgan_model, name)
     trainer.train(save_model_path=model_path)

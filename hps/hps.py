@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-18 15:38:23
-@LastEditors: houwx
-@LastEditTime: 2019-12-17 19:31:07
+@LastEditors  : houwx
+@LastEditTime : 2020-01-08 16:21:35
 @Description: Hyper-Parameters
 '''
 
@@ -109,7 +109,7 @@ class HyperParams(object):
                 'max_saved_model':5, # Max number of saved models.
                 'max_best_model':3, # Max number of saved best-loss models.
                 'print_info_every':1,# 149 for VQVAE. # Print training info every {} iterations.
-                'run_valid_every':10, # Run validation during training every {} iterations.
+                #'run_valid_every':10, # Run validation during training every {} iterations.
                 'save_model_every':1,#149, # Save model during training every {} iterations.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
