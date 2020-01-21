@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors  : houwx
-@LastEditTime : 2020-01-08 16:21:24
+@LastEditTime : 2020-01-21 14:57:16
 @Description: Hyper-Parameters
 '''
 
@@ -61,7 +61,8 @@ class HyperParams(object):
 		self.hps = namedtuple('hps', [
             'lr_vqvae', # Learning rates
             'lr_melgan',
-            'batch_size', # Batch size of training data.
+            'batch_size_vqvae', # Batch size of training data.
+            'batch_size_melgan',
             'max_grad_norm', # 5
             
             'seg_len', # Length of segment
@@ -92,6 +93,8 @@ class HyperParams(object):
             'ndf',
             'n_layers_D',
             'downsamp_factor',
+
+            "hop_length",
 			]
 		)
 		if not path is None:
@@ -102,28 +105,29 @@ class HyperParams(object):
 			default = {
                 'lr_vqvae':4e-4,
                 'lr_melgan':1e-4,
-                'batch_size':64, # Batch size of training data.
+                'batch_size_vqvae':64, # Batch size of training data.
+                'batch_size_melgan':16, # Batch size is very IMPORTANT for melgan. Set to 64 will lead to NaN loss quickly.
                 'max_grad_norm':5, # 5
                 'seg_len':8192, # Segment length loaded from raw wav.
 
                 'max_saved_model':3, # Max number of saved models.
                 'max_best_model':2, # Max number of saved best-loss models.
-                'print_info_every':149,# 149 for VQVAE, 56 for MelGAN. # Print training info every {} iterations.
-                #'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':149, # 149 for VQVAE, 56 for MelGAN. Save model during training every {} iterations.
+                'print_info_every':221,# 149 for VQVAE, 221 for MelGAN. # Print training info every {} iterations.
+                'save_model_every':221, # 149 for VQVAE, 221 for MelGAN. Save model during training every {} iterations.
+                'run_valid_every':10, # Run validation during training every {} iterations.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
                 'vqvae_epochs':10000,
-                'vqvae_n_embed':256, #512, # Try 256, 128
-                'vqvae_embed_dim':64,
+                'vqvae_n_embed':128, #512, # Try 256, 128
+                'vqvae_embed_dim':64, 
                 'loss_latent_weight':0.25, # Weight of commitment loss: 0.25 in paper VQVAE-2
                 
                 # ============== MelGAN =============
                  'melgan_epochs':10000,
                  
                 # ============== MelGAN Generator =============
-                'ngf':32,
+                'ngf':32, # ngf is a model hyperparameter, meaning the final number of feature maps in Generator, 32 in paper.
                 'n_residual_layers':3,
                 'lambda_feat':10,
 
@@ -132,6 +136,8 @@ class HyperParams(object):
                 'ndf':16,
                 'n_layers_D':4,
                 'downsamp_factor':4,
+
+                "hop_length":64,
             }
 			self._hps = self.hps(**default)
 
