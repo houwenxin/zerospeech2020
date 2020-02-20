@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-28 09:08:10
-@LastEditors: houwx
-@LastEditTime: 2019-12-06 09:23:13
+@LastEditors  : houwx
+@LastEditTime : 2020-01-20 15:03:35
 @Description: 
 '''
 import torch.nn as nn
@@ -19,7 +19,7 @@ class MelEncoder(nn.Module):
             blocks = [
                 nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 # After: (B, channel, T/2)
                 nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
             ]
@@ -27,19 +27,19 @@ class MelEncoder(nn.Module):
             blocks = [
                 nn.Conv1d(in_channels=in_channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 # After: (B, channel, T/2)
 
                 nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 # After: (B, channel, T/4)
                 nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=3, stride=1, padding=1),
             ]
 
         for _ in range(n_res_block):
             blocks.append(ResBlock(channel, channel))
-        blocks.append(nn.ReLU(inplace=True))
+        blocks.append(nn.LeakyReLU(inplace=True))
 
         self.blocks = nn.Sequential(*blocks)
         self.apply(weights_init)

@@ -1,4 +1,4 @@
-dataset=english_small
+dataset=english
 cd ../../databases/${dataset}
 
 ls train/unit/*.wav > rec_train_files.txt

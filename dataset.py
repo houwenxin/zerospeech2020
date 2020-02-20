@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-25 19:01:12
 @LastEditors  : houwx
-@LastEditTime : 2020-01-07 19:45:06
+@LastEditTime : 2020-02-09 20:06:03
 @Description: 
 '''
 
@@ -37,29 +37,39 @@ class AudioDataset(torch.utils.data.Dataset):
     spectrogram, audio pair.
     """
 
-    def __init__(self, audio_files, segment_length, sampling_rate, augment=True, mode='reconst', load_speech_id=False):
+    def __init__(self, audio_files, segment_length, sampling_rate, augment=True, mode='reconst', load_speech_id=False, return_audio_length=False, speaker2id=None, specify_speaker=None):
         self.sampling_rate = sampling_rate
         self.segment_length = segment_length
+        self.return_audio_length = return_audio_length
         #self.file_type = Path(audio_files).stem
         self.audio_files = get_file_list(audio_files)
         self.audio_files = [Path(audio_files).parent / x if x.endswith(".wav") else Path(audio_files).parent / (x + ".wav") for x in self.audio_files]
         
+        if specify_speaker:
+            print(f"Loading dataset with specified speaker only: {specify_speaker}")
+            self.audio_files = [x for x in self.audio_files if specify_speaker in x]
+
         self.load_speech_id = load_speech_id # Load speech id for generating outputs.
 
         assert mode in ['reconst', 'convert'] # Reconstruction / Conversion
         self.mode = mode
-        if self.mode == 'convert':
+        
+        if speaker2id:
+            self.speaker2id = speaker2id
+            print("Loaded Speaker Dict: ", self.speaker2id)
+        elif not speaker2id and self.mode == 'convert':
             self.target_speakers = get_target_list(audio_files)
             speakers = sorted(set(self.target_speakers))
             self.speaker2id = self.build_speaker2id(speakers)
             print("Target Speaker Dict: ", self.speaker2id)
             del speakers
-        elif self.mode == 'reconst':
+        elif not speaker2id and self.mode == 'reconst':
             speakers = sorted(set([Path(x).stem.split("_")[0] for x in self.audio_files]))
             #print(speakers)
             self.speaker2id = self.build_speaker2id(speakers)
             print("Speaker Dict: ", self.speaker2id)
             del speakers
+
         random.seed(1234)
         random.shuffle(self.audio_files)
         self.augment = augment
@@ -68,6 +78,7 @@ class AudioDataset(torch.utils.data.Dataset):
         # Read audio
         filename = self.audio_files[index]
         audio, sampling_rate = self.load_wav_to_torch(filename)
+        audio_length = audio.size(0)
         # Take segment
         if audio.size(0) >= self.segment_length:
             max_audio_start = audio.size(0) - self.segment_length
@@ -97,7 +108,10 @@ class AudioDataset(torch.utils.data.Dataset):
             speaker_info['target_speaker'] = target_speaker
         #print(speaker_info)
         # audio = audio / 32768.0
-        return audio.unsqueeze(0), speaker_info
+        if self.return_audio_length:
+            return audio.unsqueeze(0), speaker_info, audio_length
+        else:
+            return audio.unsqueeze(0), speaker_info
 
     def __len__(self):
         return len(self.audio_files)
@@ -123,3 +137,5 @@ class AudioDataset(torch.utils.data.Dataset):
     
     def get_speaker_num(self):
         return len(self.speaker2id)
+    def get_speaker2id(self):
+        return self.speaker2id

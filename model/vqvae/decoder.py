@@ -2,8 +2,8 @@
 '''
 @Author: houwx
 @Date: 2019-11-28 09:08:10
-@LastEditors: houwx
-@LastEditTime: 2019-12-06 09:23:01
+@LastEditors  : houwx
+@LastEditTime : 2020-01-20 15:05:46
 @Description: 
 '''
 import torch.nn as nn
@@ -28,8 +28,7 @@ class MelDecoder(nn.Module):
              blocks.extend([
                 nn.ConvTranspose1d(channel, channel, 4, stride=2, padding=1),
                 nn.BatchNorm1d(channel),
-                nn.ReLU(inplace=True),
-
+                nn.LeakyReLU(inplace=True),
                 nn.ConvTranspose1d(channel, out_channel, 4, stride=2, padding=1),
             ])
         self.blocks = nn.Sequential(*blocks)
