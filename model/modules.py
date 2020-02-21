@@ -32,6 +32,9 @@ class Audio2Mel(nn.Module):
         mel_fmin=0.0,
         mel_fmax=None,
     ):
+        '''
+        default hop_length: 256
+        '''
         super().__init__()
         ##############################################
         # FFT Parameters                              #
@@ -61,7 +64,7 @@ class Audio2Mel(nn.Module):
             center=False,
         )
         real_part, imag_part = fft.unbind(-1)
-        magnitude = torch.sqrt(real_part ** 2 + imag_part ** 2)
+        magnitude = torch.sqrt(real_part ** 2 + imag_part ** 2 + 1e-8) # Add a small number (1e-8) to avoid NaN in gradients. 
         mel_output = torch.matmul(self.mel_basis, magnitude)
         log_mel_spec = torch.log10(torch.clamp(mel_output, min=1e-5))
         return log_mel_spec
@@ -70,13 +73,16 @@ class Mel2Audio(nn.Module):
     def __init__(
         self,
         n_fft=1024,
-        hop_length=256,
+        hop_length=64,
         win_length=1024,
         sampling_rate=16000,
         n_mel_channels=80,
         mel_fmin=0.0,
         mel_fmax=None,
     ):
+        '''
+        default hop_length: 256
+        '''
         super().__init__()
         self.n_fft = n_fft
         self.hop_length = hop_length

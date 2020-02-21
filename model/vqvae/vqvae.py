@@ -5,6 +5,8 @@ from torch.nn import functional as F
 from model.vqvae.encoder import MelEncoder as Encoder
 from model.vqvae.decoder import MelDecoder as Decoder
 
+from model.modules import weights_init
+
 # Copyright 2018 The Sonnet Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -105,15 +107,18 @@ class VQVAE(nn.Module):
             self.dec = Decoder(in_channel=embed_dim + embed_dim + embed_dim // 2, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
         else:
             self.dec = Decoder(in_channel=embed_dim + embed_dim, channel=channel, out_channel=in_channel, stride=4, n_res_block=n_res_block)
+        
+        self.apply(weights_init)
+
 
     def forward(self, input, speaker_id=-1):
         quant_t, quant_b, diff, _, _ = self.encode(input)
         if self.num_speaker != -1:
             assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
-            dec = self.decode(quant_t, quant_b, speaker_id)
+            dec, enc = self.decode(quant_t, quant_b, speaker_id)
         else:
-            dec = self.decode(quant_t, quant_b)
-        return dec, diff
+            dec, enc = self.decode(quant_t, quant_b)
+        return dec, diff, enc
 
     def encode(self, input):
         enc_b = self.enc_b(input) # Return: (B, channel, T/4)
@@ -139,6 +144,7 @@ class VQVAE(nn.Module):
     def decode(self, quant_t, quant_b, speaker_id=-1):
         upsample_t = self.upsample_t(quant_t) # Return: (B, embed_dim, T/4)
         quant = torch.cat([upsample_t, quant_b], 1) # Return: (B, 2 * embed_dim, T/4)
+        enc = quant
         if self.num_speaker != -1:
             assert not isinstance(speaker_id, int), "Speaker id should be added during decoding."
             spk = self.spk_embed(speaker_id)
@@ -148,7 +154,7 @@ class VQVAE(nn.Module):
             quant = torch.cat((quant, spk_expand), dim=1) 
             
         dec = self.dec(quant) # Return: (B, in_channel, T/4)
-        return dec
+        return dec, enc
 
     def get_encoding(self, quant_t, quant_b):
         # Note(houwx): to combine the encodings

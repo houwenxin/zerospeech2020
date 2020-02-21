@@ -3,7 +3,7 @@
 @Author: houwx
 @Date: 2019-11-18 15:38:23
 @LastEditors  : houwx
-@LastEditTime : 2020-01-08 16:21:35
+@LastEditTime : 2020-02-06 10:21:27
 @Description: Hyper-Parameters
 '''
 
@@ -61,7 +61,8 @@ class HyperParams(object):
 		self.hps = namedtuple('hps', [
             'lr_vqvae', # Learning rates
             'lr_melgan',
-            'batch_size', # Batch size of training data.
+            'batch_size_vqvae', # Batch size of training data.
+            'batch_size_melgan',
             'max_grad_norm', # 5
             
             'seg_len', # Length of segment
@@ -69,7 +70,7 @@ class HyperParams(object):
             'max_saved_model', # Max number of saved models.
             'max_best_model', # Max number of saved best-loss models.
             'print_info_every', # Print training info every {} iterations.
-            'run_valid_every', # Run validation during training every {} iterations.
+            'valid_every_n_epoch', # Run validation during training every {} iterations.
             'save_model_every', # Save model during training every {} iterations.
             'start_save_best_model', # Start save best model afer {} iterations.
             
@@ -78,6 +79,7 @@ class HyperParams(object):
             'vqvae_n_embed',
             'vqvae_embed_dim',
             'loss_latent_weight', # Weight of commitment loss: 0.25 in paper VQVAE-2
+            "max_loss_spk_clf_weight",
 
             # ============== MelGAN =============
             'melgan_epochs',
@@ -92,6 +94,13 @@ class HyperParams(object):
             'ndf',
             'n_layers_D',
             'downsamp_factor',
+
+            "hop_length",
+
+
+            # =============== Improvement ===================
+            'enc_error_weight',
+            'rec_error_weight',
 			]
 		)
 		if not path is None:
@@ -101,29 +110,31 @@ class HyperParams(object):
 			print('[HPS Loader] - Using default parameters since no .json file is provided.')
 			default = {
                 'lr_vqvae':4e-4,
-                'lr_melgan':1e-4,
-                'batch_size':64, # Batch size of training data.
+                'lr_melgan':2e-4,
+                'batch_size_vqvae':64, # Batch size of training data.
+                'batch_size_melgan':8, # Batch size is very IMPORTANT for melgan. Set to 64 will lead to NaN loss quickly.
                 'max_grad_norm':5, # 5
-                'seg_len':8192, # Segment length loaded from raw wav.
+                'seg_len':32768, # Segment length loaded from raw wav. default in melgan:8192
 
-                'max_saved_model':5, # Max number of saved models.
-                'max_best_model':3, # Max number of saved best-loss models.
-                'print_info_every':1,# 149 for VQVAE. # Print training info every {} iterations.
-                #'run_valid_every':10, # Run validation during training every {} iterations.
-                'save_model_every':1,#149, # Save model during training every {} iterations.
+                'max_saved_model':3, # Max number of saved models.
+                'max_best_model':2, # Max number of saved best-loss models.
+                'print_info_every':442,# 149 for VQVAE, 221 for MelGAN. # Print training info every {} iterations.
+                'save_model_every':149, # 149 for VQVAE, 221 for MelGAN. Save model during training every {} iterations.
+                'valid_every_n_epoch':1, # Run validation during training every {} epochs.
                 'start_save_best_model':0, # Start save best model afer {} iterations.
 
                 # ============== VQVAE =============
-                'vqvae_epochs':6000,
-                'vqvae_n_embed':256, #512, # Try 256, 128
-                'vqvae_embed_dim':64,
+                'vqvae_epochs':10000,
+                'vqvae_n_embed':128, #512, # Try 256, 128
+                'vqvae_embed_dim':64, 
                 'loss_latent_weight':0.25, # Weight of commitment loss: 0.25 in paper VQVAE-2
+                "max_loss_spk_clf_weight": 0.1,
                 
                 # ============== MelGAN =============
-                 'melgan_epochs':3000,
+                 'melgan_epochs':10000,
                  
                 # ============== MelGAN Generator =============
-                'ngf':32,
+                'ngf':32, # ngf is a model hyperparameter, meaning the final number of feature maps in Generator, 32 in paper.
                 'n_residual_layers':3,
                 'lambda_feat':10,
 
@@ -132,6 +143,13 @@ class HyperParams(object):
                 'ndf':16,
                 'n_layers_D':4,
                 'downsamp_factor':4,
+
+                "hop_length":256,
+
+
+                # =============== Improvement ===================
+                'enc_error_weight':0.,
+                'rec_error_weight':0.,
             }
 			self._hps = self.hps(**default)
 
