@@ -1,11 +1,4 @@
 # -*- coding: UTF-8 -*-
-'''
-@Author: houwx
-@Date: 2019-11-25 19:01:12
-@LastEditors: houwx
-@LastEditTime: 2020-03-03 19:09:55
-@Description: 
-'''
 
 import torch
 import torch.nn.functional as F

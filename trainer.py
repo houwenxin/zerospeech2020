@@ -1,11 +1,5 @@
 # -*- coding: UTF-8 -*-
-'''
-@Author: houwx
-@Date: 2019-11-25 20:50:56
-@LastEditors: houwx
-@LastEditTime: 2020-03-10 18:08:41
-@Description: 
-'''
+
 import time
 from dataset import AudioDataset
 from pathlib import Path

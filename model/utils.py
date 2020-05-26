@@ -1,11 +1,4 @@
 # -*- coding: UTF-8 -*-
-'''
-@Author: houwx
-@Date: 2019-12-03 16:52:10
-@LastEditors: houwx
-@LastEditTime: 2019-12-03 16:53:16
-@Description: https://github.com/descriptinc/melgan-neurips/blob/master/mel2wav/utils.py
-'''
 import scipy.io.wavfile
 
 

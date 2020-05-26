@@ -24,7 +24,7 @@ from model.modules import weights_init
 
 # Borrowed from https://github.com/deepmind/sonnet and ported it to PyTorch
 
-# Adapted by houwx to the ZeroSpeech 2020
+# Adapted to the ZeroSpeech 2020
 
 class Quantize(nn.Module):
     def __init__(self, dim, n_embed, decay=0.99, eps=1e-5):

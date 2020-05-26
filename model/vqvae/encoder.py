@@ -1,11 +1,5 @@
 # -*- coding: UTF-8 -*-
-'''
-@Author: houwx
-@Date: 2019-11-28 09:08:10
-@LastEditors  : houwx
-@LastEditTime : 2020-01-20 15:03:35
-@Description: 
-'''
+
 import torch.nn as nn
 from model.vqvae.modules import ResBlock
 from model.modules import weights_init

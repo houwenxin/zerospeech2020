@@ -1,11 +1,5 @@
 # -*- coding: UTF-8 -*-
-'''
-@Author: houwx
-@Date: 2020-01-20 15:04:36
-@LastEditors  : houwx
-@LastEditTime : 2020-01-20 15:05:29
-@Description: 
-'''
+
 import torch.nn as nn
 from model.modules import weights_init
 
