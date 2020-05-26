@@ -2,13 +2,14 @@
 '''
 @Author: houwx
 @Date: 2019-11-25 19:01:12
-@LastEditors  : houwx
-@LastEditTime : 2020-02-09 20:06:03
+@LastEditors: houwx
+@LastEditTime: 2020-03-03 19:09:55
 @Description: 
 '''
 
 import torch
 import torch.nn.functional as F
+import torch.utils.data
 import librosa
 import numpy as np
 import random
@@ -21,7 +22,7 @@ def get_file_list(filename):
     with open(filename, encoding="utf-8") as f:
         lines = f.readlines()
     if "synthesis" in filename.name:
-        files = [line.rstrip().split()[0] for line in lines]
+        files = ["test/" + line.rstrip().split()[0] if not line.startswith('test/') else line.rstrip().split()[0] for line in lines]
     else:
         files = [line.rstrip() for line in lines]
     return files
@@ -70,8 +71,9 @@ class AudioDataset(torch.utils.data.Dataset):
             print("Speaker Dict: ", self.speaker2id)
             del speakers
 
-        random.seed(1234)
-        random.shuffle(self.audio_files)
+        if not mode == 'convert':
+            random.seed(1234)
+            random.shuffle(self.audio_files)
         self.augment = augment
 
     def __getitem__(self, index):
@@ -139,3 +141,17 @@ class AudioDataset(torch.utils.data.Dataset):
         return len(self.speaker2id)
     def get_speaker2id(self):
         return self.speaker2id
+
+
+
+
+
+def test():
+    language = 'english'
+    data_path = f"/home/tslab/houwx/jtekt/houwx/temp/bdq/zerospeech2020/2020/2019/{language}/"
+    convert_dataset = AudioDataset(audio_files=Path(data_path) / "synthesis.txt", segment_length=2048 * 126, sampling_rate=16000, mode='convert', augment=False, load_speech_id=True, return_audio_length=True)
+    for i in range(len(convert_dataset.audio_files)):
+        print(convert_dataset.audio_files[i], convert_dataset.target_speakers[i])
+
+if __name__ == '__main__':
+    test()

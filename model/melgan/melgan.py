@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 import torch.nn as nn
 from model.melgan.modules import WNConv1d, WNConvTranspose1d, ResnetBlock
 from model.modules import weights_init
@@ -9,7 +10,7 @@ class Generator(nn.Module):
         # ngf is a model hyperparameter, meaning the final number of feature maps in Generator, 32 in paper.
         super().__init__()
         # ratios = [8, 8, 2, 2] # 4 stages of upsampling: 8x, 8x, 2x, 2x --> 256x (hop_length when calculating Mel Spectrogram)
-        ratios = [8, 8, 4, 2, 2] # Note(houwx): Modify to 8x, 8x, 4x, 2x, 2x here
+        ratios = [8, 8, 4, 2, 2] # Note(houwx): Modify to 8x, 8x, 4x, 2x, 2x = 256 x 4 here
         self.hop_length = np.prod(ratios)
         mult = int(2 ** len(ratios)) # 16
 
@@ -117,6 +118,14 @@ class Discriminator(nn.Module):
     def forward(self, x):
         results = []
         for key, disc in self.model.items():
+            # print(key)
+            # print(torch.max(x))
+            # for s in disc(x):
+            #     print(torch.max(s))
+            # print("-------------")
+            # for p in disc.parameters():
+            #     print(torch.max(p))
+            # print("============")
             results.append(disc(x))
             x = self.downsample(x) # (N, 1, T) --> (N, 1, T / 2)
         return results

@@ -3,15 +3,15 @@
 @Author: houwx
 @Date: 2019-11-20 13:39:02
 @LastEditors: houwx
-@LastEditTime : 2020-02-12 13:06:36
+@LastEditTime: 2020-03-09 18:37:38
 @Description: 
 '''
 from dataset import AudioDataset
 from pathlib import Path
 import os
 from torch.utils.data import DataLoader
-from hps.hps import HyperParams
-from model.modules import Audio2Mel, Mel2Audio
+from hps import HyperParams
+from model.modules import Audio2Mel
 
 import librosa
 #from librosa.feature.inverse import mel_to_audio
@@ -21,22 +21,24 @@ import torch.nn as nn
 
 import soundfile as sf
 import copy
-
+import argparse
 from model.vqvae.vqvae import VQVAE
 from model.melgan.melgan import Generator, Discriminator
 
 class Evaluator(object):
-    def __init__(self, hps, test_data_loader, mode="vqvae", num_speaker=-1):
+    def __init__(self, hps, encoding_data_loader, convert_data_loader, mode="vqvae", num_speaker=-1, num_src_speaker=-1):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Using cuda: ", torch.cuda.is_available())
 
         self.hps = hps # Hyper-Parameters
-        self.test_data_loader = test_data_loader # Use tqdm progress bar
+        self.encoding_data_loader = encoding_data_loader # Use tqdm progress bar
+        self.convert_data_loader = convert_data_loader
         self.mode = mode
         
         self.num_speaker = num_speaker
+        self.num_src_speaker = num_src_speaker
 
-        self.criterion = nn.MSELoss() # Use MSE Loss
+        self.criterion = nn.L1Loss() # Use L1 Loss
         self.build_model()
 
     def build_model(self):
@@ -44,11 +46,11 @@ class Evaluator(object):
         self.vqvae = VQVAE(in_channel=80, channel=512, 
                             embed_dim=self.hps.vqvae_embed_dim, 
                             n_embed=self.hps.vqvae_n_embed,
-                            num_speaker=self.num_speaker,
+                            num_speaker=self.num_src_speaker,
                             ).to(self.device)
-        if self.mode == "vqvae":
-            self.mel2audio = Mel2Audio().to(self.device)
-        elif self.mode == "melgan": # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
+        if self.mode == 'vqvae':
+            return
+        elif self.mode in ["melgan", "both"]: # Embeddings from VQVAE: (B, embed_dim, T_mel / 4)
             input_dim = 2 * self.hps.vqvae_embed_dim
             if self.num_speaker != -1:
                 self.spk_embed = nn.Embedding(self.num_speaker, self.hps.vqvae_embed_dim // 2).to(self.device)
@@ -78,46 +80,52 @@ class Evaluator(object):
             raise NotImplementedError("Invalid Model Name!")
         print(f"{name} loaded.")
     
+    def to_categorical(self, y, num_classes=None):
+        y = np.array(y, dtype='int')
+        input_shape = y.shape
+        if input_shape and input_shape[-1] == 1 and len(input_shape) > 1:
+            input_shape = tuple(input_shape[:-1])
+        y = y.ravel()
+        if not num_classes:
+            num_classes = np.max(y) + 1
+        n = y.shape[0]
+        categorical = np.zeros((n, num_classes))
+        categorical[np.arange(n), y] = 1
+        output_shape = input_shape + (num_classes,)
+        categorical = np.reshape(categorical, output_shape)
+        return categorical
+
     def eval_vqvae(self, save_path):
         costs = []
         self.vqvae.eval()
         with torch.no_grad():
-            for idx, (x, speaker_info) in enumerate(self.test_data_loader):
+            for idx, (x, speaker_info) in enumerate(self.encoding_data_loader):
                 x = x.to(self.device)
 
-                speaker_name = speaker_info['source_speaker']['name'][0]
-                speaker_id = speaker_info['source_speaker']['id'].to(self.device)
-
+                source_speaker_name = speaker_info['source_speaker']['name'][0]
+                source_speaker_id = speaker_info['source_speaker']['id'].to(self.device)
+    
                 x_mel = self.audio2mel(x)
-                x_rec, _ = self.vqvae(x_mel, speaker_id)
+
+                x_rec, _, x_enc = self.vqvae(x_mel, source_speaker_id)
+
                 quant_t, quant_b, _, id_t, id_b = self.vqvae.encode(x_mel)
+                x_enc = self.vqvae.get_encoding(quant_t, quant_b).detach()
                 x_id = torch.cat((id_t, id_b), dim=1)
                 
-                save_name = str(speaker_name) + '_' + str(speaker_info['speech_id'][0]) + '.txt'
+                x_id = self.to_categorical(x_id.cpu().numpy(), num_classes=128)
+                x_id = x_id.squeeze()
                 
-                print(save_name)
-                #print(id_t)
-                #print(id_b)
-                #print("------------------------------------------------------------------------------------------")
-
-                #print(id_t.shape, id_b.shape)
+                save_name = str(source_speaker_name) + '_' + str(speaker_info['speech_id'][0]) + '.txt'
+                
                 loss_rec = self.criterion(x_rec, x_mel)
                 costs.append(loss_rec.item())
+                
+                np.savetxt(save_path + save_name, x_id, fmt='%d')
+                print(save_name)
 
-                # Convert to audio
-                # wav = self.mel2audio(x_mel.squeeze().to('cpu'))
-                # vqvae_wav = self.mel2audio(x_rec.squeeze().to('cpu'))
-                # print(x.squeeze())
-                # print(wav)
-                # print(vqvae_wav)
-                # print('------------------------------------------------------' * 2)
-                #speaker_id = int(speaker_id)
-                # sf.write(save_path + 'org_' + str(idx) + '_' + str(speaker_name) + '.wav', x.to('cpu').squeeze(), 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-                # sf.write(save_path + 'rec_' + str(idx) + '_' + str(speaker_name) + '.wav', wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
-                # sf.write(save_path + 'vqvae_' + str(idx) + '_' + str(speaker_name) + '.wav', vqvae_wav, 16000, 'PCM_16') # import soundfile as sf, conda下安装不了，得用pip装
 
-            mean_loss_rec = np.array(costs).mean(0)
-        print("Mean Rec Loss: ", mean_loss_rec)
+        print("Mean Rec Loss: ", np.array(costs).mean(0))
 
     def eval_melgan(self, save_path):
         print("Generating outputs...")
@@ -126,7 +134,7 @@ class Evaluator(object):
         self.netG.eval()
         self.spk_embed.eval()
         with torch.no_grad():
-            for idx, (x, speaker_info, audio_length) in enumerate(self.test_data_loader):
+            for idx, (x, speaker_info, audio_length) in enumerate(self.convert_data_loader):
                 #source_speaker_id = speaker_info['source_speaker']['id']
                 source_speaker_name = speaker_info['source_speaker']['name'][0]
                 target_speaker_id = speaker_info['target_speaker']['id'].to(self.device)
@@ -152,60 +160,67 @@ class Evaluator(object):
                 
     def evaluate(self, save_path):
         self.vqvae.eval()
-        if self.mode == "melgan":
+        if self.mode in ["melgan", 'both']:
             self.netG.eval()
             self.eval_melgan(save_path)
-        else:
+        if self.mode in ['vqvae', 'both']:
             self.eval_vqvae(save_path)
         
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--language', type=str)
+    parser.add_argument('--datadir', type=str)
+    parser.add_argument('--vqvae_model', type=str)
+    parser.add_argument('--melgan_model', type=str)
+    parser.add_argument('--save_path', type=str)
+    parser.add_argument('--eval_mode', choices=['both', 'vqvae', 'melgan'], default='melgan')
+    args = parser.parse_args()
+
     Hps = HyperParams()
     hps = Hps.get_tuple()
-    data_path = "../../databases/english/" # On lab server.
-    #data_path = "./databases/english_small/" # On my own PC.
-    
-    #vqvae_model = "./ckpts_codebook128_mel64/model-vqvae-10624-0-1582827-True.pt"
-    vqvae_model = "./ckpts_codebook128_mel256_spk_adv/model-vqvae-9367-148-1395682-True.pt"
-    #melgan_model = "./ckpts_codebook128_mel256_spk_adv/model-melgan-4420-441-1954080-False.pt"
-    melgan_model = "./ckpts_for_test/model-melgan_pretrain-1477-220-326416-False.pt"
-    #wav_save_path = "./recon_wavs/"
-    #enc_save_path = "/home/tslab/houwx/storage5/zerospeech2019/shared/test/submission/english/test/"
-    wav_save_path = "/home/tslab/houwx/storage5/zerospeech2019/shared/test/submission/english/test_pretrain/"
+    language = args.language
 
-    if not os.path.exists(wav_save_path):
-        os.makedirs(wav_save_path)
+    print(f"Language: {language}")
+    data_path = os.path.join(args.datadir, language)
+    vqvae_model = args.vqvae_model
+    melgan_model = args.melgan_model
+    save_path = args.save_path
+
+    #os.remove(wav_save_path)
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
         
     #hps.seg_len = 16000 * 10
-    eval_mode = "melgan"
+    eval_mode = "both"
 
-    if eval_mode == 'vqvae':
-        data_mode = 'reconst'
-    elif eval_mode == 'melgan':
-        data_mode = 'convert'
 
-    
-    if eval_mode == 'vqvae':
-        dataset = AudioDataset(audio_files=Path(data_path) / "synthesis.txt", segment_length=2048 * 126, sampling_rate=16000, mode=data_mode, augment=False, load_speech_id=True)
+    if eval_mode in ['vqvae', 'both']:
+        encoding_dataset = AudioDataset(audio_files=Path(data_path) / "eval_files.txt", segment_length=2048 * 126, sampling_rate=16000, mode='reconst', augment=False, load_speech_id=True)
         #dataset = AudioDataset(audio_files=Path(data_path) / "eval_files.txt", segment_length=2048 * 126, sampling_rate=16000, mode=data_mode, augment=False, load_speech_id=True)
-        num_speaker = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=2048 * 126, sampling_rate=16000, mode=data_mode, augment=False).get_speaker_num()
-    elif eval_mode == 'melgan':
-        dataset = AudioDataset(audio_files=Path(data_path) / "synthesis.txt", segment_length=2048 * 126, sampling_rate=16000, mode=data_mode, augment=False, load_speech_id=True, return_audio_length=True)
-        num_speaker = dataset.get_speaker_num()
-    
-    data_loader = DataLoader(dataset, batch_size=1)#hps.batch_size, num_workers=4)
+        num_src_speaker = AudioDataset(audio_files=Path(data_path) / "rec_train_files.txt", segment_length=2048 * 126, sampling_rate=16000, mode='reconst', augment=False).get_speaker_num()
 
-    evaluator = Evaluator(hps, data_loader, mode=eval_mode, num_speaker=num_speaker)
+    if eval_mode in ['melgan', 'both']:
+        convert_dataset = AudioDataset(audio_files=Path(data_path) / "synthesis.txt", segment_length=2048 * 126, sampling_rate=16000, mode='convert', augment=False, load_speech_id=True, return_audio_length=True)
+        
     
-    if eval_mode == 'vqvae':
+    num_speaker = 1 if language == 'surprise' else 2 # dataset.get_speaker_num()
+    
+    encoding_data_loader = DataLoader(encoding_dataset, batch_size=1)#hps.batch_size, num_workers=4)
+    convert_data_loader = DataLoader(convert_dataset, batch_size=1)
+
+    evaluator = Evaluator(hps, encoding_data_loader=encoding_data_loader, convert_data_loader=convert_data_loader, mode=eval_mode, num_speaker=num_speaker, num_src_speaker=num_src_speaker)
+    
+    if eval_mode in ['vqvae', 'both']:
         print(f"Evaluating VQVAE using: {vqvae_model}")
         evaluator.load_model(vqvae_model, 'vqvae')
-    else:
+
+    if eval_mode in ['melgan', 'both']:
         print(f"Evaluating MelGAN using VQVAE: {vqvae_model} | MelGAN: {melgan_model}")
-        evaluator.load_model(vqvae_model, 'vqvae/encoder_only')
+        # evaluator.load_model(vqvae_model, 'vqvae/encoder_only')
         evaluator.load_model(melgan_model, 'melgan')
     
-    evaluator.evaluate(wav_save_path)
+    evaluator.evaluate(save_path)
 
     

@@ -1,32 +1,24 @@
-# zerospeech2020
+# ZeroSpeech 2020
 
-Requirements: pytorch, librosa, pysoundfile, tqdm
-  
-### TODO List:
-1. Add matplotlib figure drawing into the code (VQVAE, MelGAN, MelGAN_pretrain).  
-2. Add code to upload several audio sample to tensorboard each epoch.  
-3. Tune learning rate / batch size / epoch nums to shorten the training time to 1~2 days. 
-  
-  
-### Progress:
-1. Pure VQVAE-2 Done. (Plan: only use bottom encoding.)
-2. Try Speaker Adversarial Training & Add speaker info to VQVAE decoder. (Done)
-3. Train vanilla MelGAN. (Done.)
-4. Train MelGAN with weighted loss: a*loss_enc + b*loss_mel + c*loss_adv. (TODO)
-5. Pretrain MelGAN with loss_mel. (In progress)
-6. Train Pretrained MelGAN with weighted loss: a*loss_enc + b*loss_mel + c*loss_adv. (TODO)
+Implementation of our submission to ZeroSpeech 2020 (Hou et al.)
 
-### Related Repositories:
+Results: https://zerospeech.com/2020/results.html
+
+The system is composed of a hierarchical VQ-VAE encoder to  discover discrete spoken word units from speech and a MelGAN vocoder to  directly generate speech. They are trained separately. During VQ-VAE  training, we add the speaker id before the VQ-VAE decoder to help reduce the speaker information encoded in the word units. 
+
+### Usage:
+
+1. Run scripts/data_manifest.sh (modify datadir to the root dir of raw dataset)
+2. python trainer.py --mode vqvae --language [english/surprise] --ckpt_path [path-to-save-model] --datadir [path-to-the-root-dir-of-dataset]
+3. python trainer.py --mode melgan --load_vqvae [path-to-vqvae-ckpts] --language [english/surprise] --ckpt_path [path-to-save-model] --datadir [path-to-the-root-dir-of-dataset]
+4. python evaluator.py --language [english/surprise] --datadir [path-to-the-root-dir-of-dataset] --vqvae_model [path-to-vqvae-ckpts] --melgan_model [path-to-melgan-ckpts] --save_path [path-to-save-generated-results]
+
+
+
+#### Referred Repositories:
+
 1. vq-vae-2-pytorch: https://github.com/rosinality/vq-vae-2-pytorch  
 2. melgan-neurips: https://github.com/descriptinc/melgan-neurips  
 3. ZeroSpeech-TTS-without-T: https://github.com/andi611/ZeroSpeech-TTS-without-T  
 4. VQ-VAE-Speech: https://github.com/swasun/VQ-VAE-Speech  
 5. pytorch-vqvae: https://github.com/houwenxin/pytorch-vqvae  
-
-### References:
-+ Unsupervised End-to-End Learning of Discrete Linguistic Units for Voice. https://arxiv.org/pdf/1905.11563.pdf  
-+ VQVAE Unsupervised Unit Discovery and Multi-scale Code2Spec Inverter. https://arxiv.org/pdf/1905.11449.pdf  
-+ MelGAN: Generative Adversarial Networks for Conditional Waveform Synthesis. https://arxiv.org/pdf/1910.06711.pdf  
-+ Generating Diverse High-Fidelity Images with VQ-VAE-2. https://arxiv.org/pdf/1906.00446.pdf  
-+ [Possible] SPEAKER INVARIANT FEATURE EXTRACTION FOR ZERO-RESOURCE LANGUAGESWITH ADVERSARIAL LEARNING  
-
