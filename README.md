@@ -10,7 +10,7 @@ The system is composed of a hierarchical VQ-VAE encoder to  discover discrete sp
 
 1. Run scripts/data_manifest.sh (modify datadir to the root dir of raw dataset)
 2. python trainer.py --mode vqvae --language [english/surprise] --ckpt_path [path-to-save-model] --datadir [path-to-the-root-dir-of-dataset]
-3. python trainer.py --mode melgan --load_vqvae [path-to-vqvae-ckpts] --language [english/surprise] --ckpt_path [path-to-save-model] --datadir [path-to-the-root-dir-of-dataset]
+3. python trainer.py --mode melgan --load_vqvae True --pretrained_vqvae [path-to-vqvae-ckpts] --language [english/surprise] --ckpt_path [path-to-save-model] --datadir [path-to-the-root-dir-of-dataset]
 4. python evaluator.py --language [english/surprise] --datadir [path-to-the-root-dir-of-dataset] --vqvae_model [path-to-vqvae-ckpts] --melgan_model [path-to-melgan-ckpts] --save_path [path-to-save-generated-results]
 
 
